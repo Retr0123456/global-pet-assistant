@@ -61,6 +61,14 @@ if [[ "$thread_source" != "codex:thread-abc" ]]; then
 fi
 echo "thread_id alias mapping: ok"
 
+fallback_source_a="$(printf '%s' '{"hook_event_name":"UserPromptSubmit","cwd":"/tmp/repo","prompt":"Same cwd A"}' | env -u CODEX_SESSION_ID -u CODEX_THREAD_ID -u CODEX_CONVERSATION_ID KITTY_WINDOW_ID=41 KITTY_LISTEN_ON=unix:/tmp/mykitty python3 "$HOOK" --print-event | python3 -c 'import json,sys; print(json.load(sys.stdin)["source"])')"
+fallback_source_b="$(printf '%s' '{"hook_event_name":"UserPromptSubmit","cwd":"/tmp/repo","prompt":"Same cwd B"}' | env -u CODEX_SESSION_ID -u CODEX_THREAD_ID -u CODEX_CONVERSATION_ID KITTY_WINDOW_ID=42 KITTY_LISTEN_ON=unix:/tmp/mykitty python3 "$HOOK" --print-event | python3 -c 'import json,sys; print(json.load(sys.stdin)["source"])')"
+if [[ "$fallback_source_a" == "$fallback_source_b" ]]; then
+  echo "Expected fallback kitty windows in the same cwd to map to distinct sources, got $fallback_source_a" >&2
+  exit 1
+fi
+echo "fallback kitty session separation: ok"
+
 kitty_action="$(printf '%s' '{"hook_event_name":"UserPromptSubmit","session_id":"session-1234567890","cwd":"/tmp/repo","prompt":"Focus kitty"}' | KITTY_WINDOW_ID=42 KITTY_LISTEN_ON=unix:/tmp/mykitty python3 "$HOOK" --print-event)"
 KITTY_ACTION="$kitty_action" python3 - <<'PY'
 import json

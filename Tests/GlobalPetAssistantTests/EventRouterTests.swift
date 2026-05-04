@@ -136,6 +136,32 @@ struct EventRouterTests {
     }
 
     @Test
+    func testSameDirectoryDistinctSessionsRemainSeparateThreads() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(
+            source: "codex-cli:kitty-41",
+            level: .running,
+            message: "First tab is running.",
+            ttlMs: 120_000,
+            cwd: "/tmp/global-pet-assistant"
+        ))
+        router.accept(LocalPetEvent(
+            source: "codex-cli:kitty-42",
+            level: .running,
+            message: "Second tab is running.",
+            ttlMs: 120_000,
+            cwd: "/tmp/global-pet-assistant"
+        ))
+
+        let snapshot = router.snapshot
+        #expect(snapshot.activeEventCount == 2)
+        #expect(snapshot.activeThreads.map(\.source) == ["codex-cli:kitty-42", "codex-cli:kitty-41"])
+        #expect(snapshot.activeThreads.map(\.directoryName) == ["global-pet-assistant", "global-pet-assistant"])
+        #expect(snapshot.activeThreads.map(\.messagePreview) == ["Second tab is running.", "First tab is running."])
+    }
+
+    @Test
     func testTTLExpiryReturnsRouterToIdle() {
         var now = Date(timeIntervalSince1970: 1_000)
         let router = EventRouter(now: { now }, onStateChange: { _ in })

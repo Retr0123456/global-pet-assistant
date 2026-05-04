@@ -75,7 +75,7 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     session_id = first_nonempty(
         payload,
         ["session_id", "session-id", "thread_id", "thread-id", "conversation_id", "conversation-id"],
-        fallback=f"unknown:{os.getppid()}:{cwd or 'no-cwd'}",
+        fallback=fallback_session_id(cwd),
     )
     turn_id = first_nonempty(payload, ["turn_id", "turn-id"], fallback="")
     source = f"codex-cli:{stable_session_key(session_id)}"
@@ -150,6 +150,25 @@ def first_nonempty(payload: Dict[str, Any], keys: List[str], fallback: str) -> s
         if value:
             return value
     return fallback
+
+
+def fallback_session_id(cwd: str) -> str:
+    cwd_key = cwd or "no-cwd"
+    for env_name in ("CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_CONVERSATION_ID"):
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            return f"env:{env_name}:{value}"
+
+    kitty_window_id = os.environ.get("KITTY_WINDOW_ID", "").strip()
+    kitty_listen_on = os.environ.get("KITTY_LISTEN_ON", "").strip()
+    if kitty_window_id:
+        return f"unknown:kitty:{kitty_listen_on or 'no-listen-on'}:{kitty_window_id}:{cwd_key}"
+
+    term_session_id = os.environ.get("TERM_SESSION_ID", "").strip()
+    if term_session_id:
+        return f"unknown:term:{term_session_id}:{cwd_key}"
+
+    return f"unknown:{os.getppid()}:{cwd_key}"
 
 
 def stable_session_key(value: str) -> str:

@@ -214,7 +214,11 @@ final class FloatingPetWindow: NSPanel {
 
 final class PetWindowContentView: NSView {
     private static let threadPanelMaxWidth: CGFloat = 320
-    private static let threadPanelHeight: CGFloat = 72
+    private static let threadPanelMinHeight: CGFloat = 72
+    private static let threadPanelMaxHeight: CGFloat = 220
+    private static let threadRowMinHeight: CGFloat = 54
+    private static let threadPanelVerticalInset: CGFloat = 8
+    private static let threadStackSpacing: CGFloat = 6
     private static let threadPanelGap: CGFloat = 8
     private static let badgeSize: CGFloat = 30
 
@@ -233,7 +237,7 @@ final class PetWindowContentView: NSView {
 
         return NSSize(
             width: max(petView.intrinsicContentSize.width, Self.threadPanelMaxWidth),
-            height: petView.intrinsicContentSize.height + Self.threadPanelGap + Self.threadPanelHeight
+            height: petView.intrinsicContentSize.height + Self.threadPanelGap + currentThreadPanelHeight
         )
     }
 
@@ -241,7 +245,9 @@ final class PetWindowContentView: NSView {
     private let threadBadgeButton = NSButton()
     private let threadPanelView = NSGlassEffectView()
     private let threadPanelContentView = NSView()
+    private let threadScrollView = NSScrollView()
     private let threadStackView = NSStackView()
+    private var threadPanelHeightConstraint: NSLayoutConstraint?
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
     private var didMouseDownOnPet = false
@@ -264,6 +270,9 @@ final class PetWindowContentView: NSView {
         configureThreadBadgeButton()
         configureThreadPanel()
 
+        let panelHeightConstraint = threadPanelView.heightAnchor.constraint(equalToConstant: Self.threadPanelMinHeight)
+        threadPanelHeightConstraint = panelHeightConstraint
+
         NSLayoutConstraint.activate([
             petView.trailingAnchor.constraint(equalTo: trailingAnchor),
             petView.topAnchor.constraint(equalTo: topAnchor),
@@ -278,7 +287,7 @@ final class PetWindowContentView: NSView {
             threadPanelView.centerXAnchor.constraint(equalTo: centerXAnchor),
             threadPanelView.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth),
             threadPanelView.topAnchor.constraint(equalTo: petView.bottomAnchor, constant: Self.threadPanelGap),
-            threadPanelView.heightAnchor.constraint(equalToConstant: Self.threadPanelHeight)
+            panelHeightConstraint
         ])
 
         updateThreadSnapshot(nil)
@@ -412,6 +421,7 @@ final class PetWindowContentView: NSView {
 
         updateThreadBadge()
         rebuildThreadPanel()
+        updateThreadPanelHeight()
         applyThreadPanelVisibility()
 
         let nextSize = desiredContentSize
@@ -429,6 +439,7 @@ final class PetWindowContentView: NSView {
         let previousSize = desiredContentSize
         isThreadPanelExpanded.toggle()
         updateThreadBadge()
+        updateThreadPanelHeight()
         applyThreadPanelVisibility()
 
         let nextSize = desiredContentSize
@@ -468,12 +479,22 @@ final class PetWindowContentView: NSView {
         threadPanelContentView.layer?.borderWidth = 1
         threadPanelContentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
         threadPanelContentView.layer?.masksToBounds = true
-        threadPanelContentView.addSubview(threadStackView)
+
+        threadPanelContentView.addSubview(threadScrollView)
+        threadScrollView.translatesAutoresizingMaskIntoConstraints = false
+        threadScrollView.drawsBackground = false
+        threadScrollView.borderType = .noBorder
+        threadScrollView.hasVerticalScroller = true
+        threadScrollView.autohidesScrollers = true
+        threadScrollView.scrollerStyle = .overlay
+        threadScrollView.contentView.drawsBackground = false
+
+        threadScrollView.documentView = threadStackView
         threadStackView.translatesAutoresizingMaskIntoConstraints = false
         threadStackView.orientation = .vertical
         threadStackView.alignment = .width
         threadStackView.distribution = .fill
-        threadStackView.spacing = 4
+        threadStackView.spacing = Self.threadStackSpacing
 
         NSLayoutConstraint.activate([
             threadPanelContentView.leadingAnchor.constraint(equalTo: threadPanelView.leadingAnchor),
@@ -481,10 +502,15 @@ final class PetWindowContentView: NSView {
             threadPanelContentView.topAnchor.constraint(equalTo: threadPanelView.topAnchor),
             threadPanelContentView.bottomAnchor.constraint(equalTo: threadPanelView.bottomAnchor),
 
-            threadStackView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor, constant: 12),
-            threadStackView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor, constant: -12),
-            threadStackView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: 8),
-            threadStackView.bottomAnchor.constraint(lessThanOrEqualTo: threadPanelContentView.bottomAnchor, constant: -8)
+            threadScrollView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor, constant: 12),
+            threadScrollView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor, constant: -12),
+            threadScrollView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: Self.threadPanelVerticalInset),
+            threadScrollView.bottomAnchor.constraint(equalTo: threadPanelContentView.bottomAnchor, constant: -Self.threadPanelVerticalInset),
+
+            threadStackView.leadingAnchor.constraint(equalTo: threadScrollView.contentView.leadingAnchor),
+            threadStackView.trailingAnchor.constraint(equalTo: threadScrollView.contentView.trailingAnchor),
+            threadStackView.topAnchor.constraint(equalTo: threadScrollView.contentView.topAnchor),
+            threadStackView.widthAnchor.constraint(equalTo: threadScrollView.contentView.widthAnchor)
         ])
     }
 
@@ -520,7 +546,7 @@ final class PetWindowContentView: NSView {
             view.removeFromSuperview()
         }
 
-        let threads = Array((threadSnapshot?.activeThreads ?? []).prefix(1))
+        let threads = threadSnapshot?.activeThreads ?? []
         for thread in threads {
             threadStackView.addArrangedSubview(makeThreadRow(for: thread))
         }
@@ -546,6 +572,7 @@ final class PetWindowContentView: NSView {
         row.alignment = .width
         row.spacing = 3
         row.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        row.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.threadRowMinHeight).isActive = true
 
         if thread.action != nil {
             row.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(handleThreadRowClick(_:))))
@@ -559,7 +586,7 @@ final class PetWindowContentView: NSView {
             recognizer.state == .ended,
             let row = recognizer.view,
             let index = threadStackView.arrangedSubviews.firstIndex(of: row),
-            let thread = threadSnapshot?.activeThreads.prefix(1).dropFirst(index).first,
+            let thread = threadSnapshot?.activeThreads.dropFirst(index).first,
             thread.action != nil
         else {
             return
@@ -570,6 +597,22 @@ final class PetWindowContentView: NSView {
 
     private func applyThreadPanelVisibility() {
         threadPanelView.isHidden = !isThreadPanelExpanded || (threadSnapshot?.activeEventCount ?? 0) == 0
+    }
+
+    private var currentThreadPanelHeight: CGFloat {
+        guard isThreadPanelExpanded else {
+            return Self.threadPanelMinHeight
+        }
+
+        let threadCount = max(threadSnapshot?.activeThreads.count ?? 0, 1)
+        let rowsHeight = CGFloat(threadCount) * Self.threadRowMinHeight
+        let spacingHeight = CGFloat(max(threadCount - 1, 0)) * Self.threadStackSpacing
+        let contentHeight = Self.threadPanelVerticalInset * 2 + rowsHeight + spacingHeight
+        return min(Self.threadPanelMaxHeight, max(Self.threadPanelMinHeight, contentHeight))
+    }
+
+    private func updateThreadPanelHeight() {
+        threadPanelHeightConstraint?.constant = currentThreadPanelHeight
     }
 }
 
