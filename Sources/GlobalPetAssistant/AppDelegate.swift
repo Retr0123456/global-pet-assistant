@@ -3,7 +3,10 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var petWindow: FloatingPetWindow?
+    private var spriteView: PetSpriteView?
     private var statusItem: NSStatusItem?
+    private var eventRouter: EventRouter?
+    private var eventServer: LocalEventServer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -19,7 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let window = FloatingPetWindow(contentView: spriteView)
 
             self.petWindow = window
+            self.spriteView = spriteView
             installStatusMenu()
+            installEventRouter()
+            startEventServer()
             window.show()
             spriteView.play(.idle)
         } catch {
@@ -41,6 +47,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         item.menu = menu
         statusItem = item
+    }
+
+    private func installEventRouter() {
+        eventRouter = EventRouter { [weak self] state in
+            self?.petWindow?.show()
+            self?.spriteView?.play(state)
+        }
+    }
+
+    private func startEventServer() {
+        let server = LocalEventServer(
+            onHealth: { [weak self] in
+                self?.eventRouter?.snapshot
+            },
+            onEvent: { [weak self] event in
+                self?.eventRouter?.accept(event) ?? event.resolvedPetState
+            }
+        )
+
+        do {
+            try server.start()
+            eventServer = server
+        } catch {
+            NSLog("GlobalPetAssistant event server failed to start: \(String(describing: error))")
+        }
     }
 
     @objc private func showPet() {

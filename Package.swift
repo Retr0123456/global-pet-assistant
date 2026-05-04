@@ -11,6 +11,10 @@ let package = Package(
         .executable(
             name: "GlobalPetAssistant",
             targets: ["GlobalPetAssistant"]
+        ),
+        .executable(
+            name: "petctl",
+            targets: ["petctl"]
         )
     ],
     targets: [
@@ -19,6 +23,9 @@ let package = Package(
             resources: [
                 .process("Resources")
             ]
+        ),
+        .executableTarget(
+            name: "petctl"
         )
     ]
 )

@@ -1,7 +1,7 @@
 import AppKit
 import ImageIO
 
-enum PetAnimationState: String, CaseIterable {
+enum PetAnimationState: String, CaseIterable, Codable {
     case idle
     case runningRight = "running-right"
     case runningLeft = "running-left"

@@ -71,6 +71,28 @@ swift build
 swift run GlobalPetAssistant
 ```
 
+Local event API:
+
+```bash
+curl -X POST http://127.0.0.1:17321/events \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"manual","type":"task.completed","level":"success","title":"Task complete"}'
+
+swift run petctl notify --level success --title "Task complete"
+swift run petctl state running --message "Working..."
+swift run petctl clear
+
+curl -fsS http://127.0.0.1:17321/healthz
+```
+
+`/healthz` returns the app liveness status plus the router snapshot (`state` and `activeEvents`) so scripts can distinguish a reachable app from an idle or busy pet.
+
+Manual event-runtime verification:
+
+```bash
+Tools/verify-event-runtime.sh
+```
+
 Build a local debug `.app` that can be opened through macOS LaunchServices:
 
 ```bash

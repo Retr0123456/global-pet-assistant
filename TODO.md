@@ -25,26 +25,26 @@
 - [ ] Parse `pet.json`.
 - [ ] Validate `spritesheetPath` without allowing path traversal.
 - [x] Support PNG and WebP.
-- [ ] Add "Open pet folder" menu item.
+- [x] Add "Open pet folder" menu item.
 - [x] Load the first compatible Codex pet from `~/.codex/pets` as a development fallback.
 - [ ] Add optional importer from `~/.codex/pets`.
 
 ## Phase 3: Event Runtime
 
-- [ ] Define event schema.
-- [ ] Implement local event server.
-- [ ] Start with localhost HTTP or Unix domain socket.
-- [ ] Add request size limits.
+- [x] Define event schema.
+- [x] Implement local event server.
+- [x] Start with localhost HTTP or Unix domain socket.
+- [x] Add request size limits.
 - [ ] Add source-level rate limiting.
-- [ ] Add event deduplication.
-- [ ] Add notification TTL handling.
-- [ ] Implement state priority routing.
+- [x] Add event deduplication.
+- [x] Add notification TTL handling.
+- [x] Implement state priority routing.
 
 ## Phase 4: CLI
 
-- [ ] Create `petctl notify`.
-- [ ] Create `petctl state`.
-- [ ] Create `petctl clear`.
+- [x] Create `petctl notify`.
+- [x] Create `petctl state`.
+- [x] Create `petctl clear`.
 - [ ] Create `petctl open-folder`.
 - [ ] Add shell examples for Codex CLI and Claude Code hooks.
 
