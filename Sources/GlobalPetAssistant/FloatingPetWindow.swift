@@ -40,6 +40,15 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
+    var onThreadDismiss: ((PetThreadSnapshot) -> Void)? {
+        get {
+            petContentView.onThreadDismiss
+        }
+        set {
+            petContentView.onThreadDismiss = newValue
+        }
+    }
+
     var contextMenuProvider: (() -> NSMenu?)? {
         get {
             petContentView.contextMenuProvider
@@ -214,11 +223,11 @@ final class FloatingPetWindow: NSPanel {
 
 final class PetWindowContentView: NSView {
     private static let threadPanelMaxWidth: CGFloat = 320
-    private static let threadPanelMinHeight: CGFloat = 72
-    private static let threadPanelMaxHeight: CGFloat = 220
-    private static let threadRowMinHeight: CGFloat = 54
-    private static let threadPanelVerticalInset: CGFloat = 8
-    private static let threadStackSpacing: CGFloat = 6
+    private static let threadPanelMinHeight: CGFloat = 78
+    private static let threadPanelMaxHeight: CGFloat = 260
+    private static let threadRowMinHeight: CGFloat = 78
+    private static let threadPanelVerticalInset: CGFloat = 0
+    private static let threadStackSpacing: CGFloat = 8
     private static let threadPanelGap: CGFloat = 8
     private static let badgeSize: CGFloat = 30
 
@@ -226,6 +235,7 @@ final class PetWindowContentView: NSView {
     var onHoverChanged: ((Bool) -> Void)?
     var onDragChanged: ((PetDragDirection?) -> Void)?
     var onThreadClick: ((PetThreadSnapshot) -> Void)?
+    var onThreadDismiss: ((PetThreadSnapshot) -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
     var onDesiredSizeChanged: (() -> Void)?
@@ -243,7 +253,7 @@ final class PetWindowContentView: NSView {
 
     private let petView: PetSpriteView
     private let threadBadgeButton = NSButton()
-    private let threadPanelView = NSGlassEffectView()
+    private let threadPanelView = NSView()
     private let threadPanelContentView = NSView()
     private let threadScrollView = NSScrollView()
     private let threadStackView = NSStackView()
@@ -466,18 +476,13 @@ final class PetWindowContentView: NSView {
     private func configureThreadPanel() {
         addSubview(threadPanelView)
         threadPanelView.translatesAutoresizingMaskIntoConstraints = false
-        threadPanelView.style = .regular
-        threadPanelView.cornerRadius = 16
-        threadPanelView.clipsToBounds = true
-        threadPanelView.tintColor = NSColor.black.withAlphaComponent(0.82)
-        threadPanelView.contentView = threadPanelContentView
+        threadPanelView.wantsLayer = true
+        threadPanelView.layer?.backgroundColor = NSColor.clear.cgColor
+        threadPanelView.addSubview(threadPanelContentView)
 
         threadPanelContentView.translatesAutoresizingMaskIntoConstraints = false
         threadPanelContentView.wantsLayer = true
-        threadPanelContentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
-        threadPanelContentView.layer?.cornerRadius = 16
-        threadPanelContentView.layer?.borderWidth = 1
-        threadPanelContentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        threadPanelContentView.layer?.backgroundColor = NSColor.clear.cgColor
         threadPanelContentView.layer?.masksToBounds = true
 
         threadPanelContentView.addSubview(threadScrollView)
@@ -502,8 +507,8 @@ final class PetWindowContentView: NSView {
             threadPanelContentView.topAnchor.constraint(equalTo: threadPanelView.topAnchor),
             threadPanelContentView.bottomAnchor.constraint(equalTo: threadPanelView.bottomAnchor),
 
-            threadScrollView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor, constant: 12),
-            threadScrollView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor, constant: -12),
+            threadScrollView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor),
+            threadScrollView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor),
             threadScrollView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: Self.threadPanelVerticalInset),
             threadScrollView.bottomAnchor.constraint(equalTo: threadPanelContentView.bottomAnchor, constant: -Self.threadPanelVerticalInset),
 
@@ -553,46 +558,18 @@ final class PetWindowContentView: NSView {
     }
 
     private func makeThreadRow(for thread: PetThreadSnapshot) -> NSView {
-        let directoryLabel = NSTextField(labelWithString: thread.directoryName)
-        directoryLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        directoryLabel.textColor = .white
-        directoryLabel.lineBreakMode = .byTruncatingTail
-        directoryLabel.maximumNumberOfLines = 1
-        directoryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let messageLabel = NSTextField(wrappingLabelWithString: thread.messagePreview)
-        messageLabel.font = .systemFont(ofSize: 13, weight: .regular)
-        messageLabel.textColor = NSColor.white.withAlphaComponent(0.82)
-        messageLabel.lineBreakMode = .byWordWrapping
-        messageLabel.maximumNumberOfLines = 2
-        messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let row = NSStackView(views: [directoryLabel, messageLabel])
-        row.orientation = .vertical
-        row.alignment = .width
-        row.spacing = 3
-        row.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let row = ThreadMessageRowView(
+            thread: thread,
+            onOpen: { [weak self] thread in
+                self?.onThreadClick?(thread)
+            },
+            onDismiss: { [weak self] thread in
+                self?.onThreadDismiss?(thread)
+            }
+        )
         row.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.threadRowMinHeight).isActive = true
 
-        if thread.action != nil {
-            row.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(handleThreadRowClick(_:))))
-        }
-
         return row
-    }
-
-    @objc private func handleThreadRowClick(_ recognizer: NSClickGestureRecognizer) {
-        guard
-            recognizer.state == .ended,
-            let row = recognizer.view,
-            let index = threadStackView.arrangedSubviews.firstIndex(of: row),
-            let thread = threadSnapshot?.activeThreads.dropFirst(index).first,
-            thread.action != nil
-        else {
-            return
-        }
-
-        onThreadClick?(thread)
     }
 
     private func applyThreadPanelVisibility() {
@@ -613,6 +590,161 @@ final class PetWindowContentView: NSView {
 
     private func updateThreadPanelHeight() {
         threadPanelHeightConstraint?.constant = currentThreadPanelHeight
+    }
+}
+
+private final class ThreadMessageRowView: NSView {
+    private static let cornerRadius: CGFloat = 16
+    private static let closeButtonSize: CGFloat = 18
+
+    private let thread: PetThreadSnapshot
+    private let onOpen: (PetThreadSnapshot) -> Void
+    private let onDismiss: (PetThreadSnapshot) -> Void
+    private let glassView = NSGlassEffectView()
+    private let contentView = NSView()
+    private let closeButton = NSButton()
+    private var hoverTrackingArea: NSTrackingArea?
+
+    init(
+        thread: PetThreadSnapshot,
+        onOpen: @escaping (PetThreadSnapshot) -> Void,
+        onDismiss: @escaping (PetThreadSnapshot) -> Void
+    ) {
+        self.thread = thread
+        self.onOpen = onOpen
+        self.onDismiss = onDismiss
+        super.init(frame: .zero)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        hoverTrackingArea = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        closeButton.isHidden = false
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        closeButton.isHidden = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard thread.action != nil else {
+            return
+        }
+
+        onOpen(thread)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    private func setupView() {
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+
+        addSubview(glassView)
+        glassView.translatesAutoresizingMaskIntoConstraints = false
+        glassView.style = .regular
+        glassView.cornerRadius = Self.cornerRadius
+        glassView.clipsToBounds = true
+        glassView.tintColor = NSColor.black.withAlphaComponent(0.84)
+        glassView.contentView = contentView
+
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.76).cgColor
+        contentView.layer?.cornerRadius = Self.cornerRadius
+        contentView.layer?.borderWidth = 1
+        contentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        contentView.layer?.masksToBounds = true
+
+        let directoryLabel = NSTextField(labelWithString: thread.directoryName)
+        directoryLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        directoryLabel.textColor = .white
+        directoryLabel.alignment = .right
+        directoryLabel.lineBreakMode = .byTruncatingTail
+        directoryLabel.maximumNumberOfLines = 1
+        directoryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let messageLabel = NSTextField(wrappingLabelWithString: thread.messagePreview)
+        messageLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        messageLabel.textColor = NSColor.white.withAlphaComponent(0.82)
+        messageLabel.alignment = .right
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.maximumNumberOfLines = 2
+        messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let labelStackView = NSStackView(views: [directoryLabel, messageLabel])
+        labelStackView.translatesAutoresizingMaskIntoConstraints = false
+        labelStackView.orientation = .vertical
+        labelStackView.alignment = .width
+        labelStackView.distribution = .fill
+        labelStackView.spacing = 3
+        labelStackView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        contentView.addSubview(labelStackView)
+
+        addSubview(closeButton)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.isHidden = true
+        closeButton.isBordered = false
+        closeButton.image = NSImage(
+            systemSymbolName: "xmark.circle.fill",
+            accessibilityDescription: "Dismiss notification"
+        )
+        closeButton.imagePosition = .imageOnly
+        closeButton.imageScaling = .scaleProportionallyDown
+        closeButton.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+        closeButton.target = self
+        closeButton.action = #selector(dismissNotification)
+        closeButton.setButtonType(.momentaryPushIn)
+
+        NSLayoutConstraint.activate([
+            glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glassView.topAnchor.constraint(equalTo: topAnchor),
+            glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            contentView.leadingAnchor.constraint(equalTo: glassView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: glassView.trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: glassView.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
+
+            closeButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            closeButton.widthAnchor.constraint(equalToConstant: Self.closeButtonSize),
+            closeButton.heightAnchor.constraint(equalToConstant: Self.closeButtonSize),
+
+            labelStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            labelStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            labelStackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            labelStackView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 12),
+            labelStackView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12)
+        ])
+    }
+
+    @objc private func dismissNotification() {
+        onDismiss(thread)
     }
 }
 

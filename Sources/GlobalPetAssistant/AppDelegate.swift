@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.onThreadClick = { [weak self] thread in
                 _ = self?.performAction(thread.action, source: thread.source)
             }
+            window.onThreadDismiss = { [weak self] thread in
+                self?.eventRouter?.clearSource(thread.source)
+            }
             window.onPetHoverChanged = { [weak self] isInside in
                 self?.petBehaviorController?.handleHoverChanged(isInside: isInside)
             }
