@@ -31,15 +31,6 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
-    var onThreadClick: ((PetThreadSnapshot) -> Void)? {
-        get {
-            petContentView.onThreadClick
-        }
-        set {
-            petContentView.onThreadClick = newValue
-        }
-    }
-
     var onThreadDismiss: ((PetThreadSnapshot) -> Void)? {
         get {
             petContentView.onThreadDismiss
@@ -224,8 +215,7 @@ final class FloatingPetWindow: NSPanel {
 final class PetWindowContentView: NSView {
     private static let threadPanelMaxWidth: CGFloat = 320
     private static let threadPanelMinHeight: CGFloat = 78
-    private static let threadPanelMaxHeight: CGFloat = 260
-    private static let threadRowMinHeight: CGFloat = 78
+    private static let threadRowHeight: CGFloat = 78
     private static let threadPanelVerticalInset: CGFloat = 0
     private static let threadStackSpacing: CGFloat = 8
     private static let threadPanelGap: CGFloat = 8
@@ -234,7 +224,6 @@ final class PetWindowContentView: NSView {
     var onClick: (() -> Void)?
     var onHoverChanged: ((Bool) -> Void)?
     var onDragChanged: ((PetDragDirection?) -> Void)?
-    var onThreadClick: ((PetThreadSnapshot) -> Void)?
     var onThreadDismiss: ((PetThreadSnapshot) -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
@@ -255,7 +244,6 @@ final class PetWindowContentView: NSView {
     private let threadBadgeButton = NSButton()
     private let threadPanelView = NSView()
     private let threadPanelContentView = NSView()
-    private let threadScrollView = NSScrollView()
     private let threadStackView = NSStackView()
     private var threadPanelHeightConstraint: NSLayoutConstraint?
     private var mouseDownScreenPoint: NSPoint?
@@ -485,16 +473,7 @@ final class PetWindowContentView: NSView {
         threadPanelContentView.layer?.backgroundColor = NSColor.clear.cgColor
         threadPanelContentView.layer?.masksToBounds = true
 
-        threadPanelContentView.addSubview(threadScrollView)
-        threadScrollView.translatesAutoresizingMaskIntoConstraints = false
-        threadScrollView.drawsBackground = false
-        threadScrollView.borderType = .noBorder
-        threadScrollView.hasVerticalScroller = true
-        threadScrollView.autohidesScrollers = true
-        threadScrollView.scrollerStyle = .overlay
-        threadScrollView.contentView.drawsBackground = false
-
-        threadScrollView.documentView = threadStackView
+        threadPanelContentView.addSubview(threadStackView)
         threadStackView.translatesAutoresizingMaskIntoConstraints = false
         threadStackView.orientation = .vertical
         threadStackView.alignment = .width
@@ -507,15 +486,10 @@ final class PetWindowContentView: NSView {
             threadPanelContentView.topAnchor.constraint(equalTo: threadPanelView.topAnchor),
             threadPanelContentView.bottomAnchor.constraint(equalTo: threadPanelView.bottomAnchor),
 
-            threadScrollView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor),
-            threadScrollView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor),
-            threadScrollView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: Self.threadPanelVerticalInset),
-            threadScrollView.bottomAnchor.constraint(equalTo: threadPanelContentView.bottomAnchor, constant: -Self.threadPanelVerticalInset),
-
-            threadStackView.leadingAnchor.constraint(equalTo: threadScrollView.contentView.leadingAnchor),
-            threadStackView.trailingAnchor.constraint(equalTo: threadScrollView.contentView.trailingAnchor),
-            threadStackView.topAnchor.constraint(equalTo: threadScrollView.contentView.topAnchor),
-            threadStackView.widthAnchor.constraint(equalTo: threadScrollView.contentView.widthAnchor)
+            threadStackView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor),
+            threadStackView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor),
+            threadStackView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: Self.threadPanelVerticalInset),
+            threadStackView.bottomAnchor.constraint(equalTo: threadPanelContentView.bottomAnchor, constant: -Self.threadPanelVerticalInset)
         ])
     }
 
@@ -560,14 +534,11 @@ final class PetWindowContentView: NSView {
     private func makeThreadRow(for thread: PetThreadSnapshot) -> NSView {
         let row = ThreadMessageRowView(
             thread: thread,
-            onOpen: { [weak self] thread in
-                self?.onThreadClick?(thread)
-            },
             onDismiss: { [weak self] thread in
                 self?.onThreadDismiss?(thread)
             }
         )
-        row.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.threadRowMinHeight).isActive = true
+        row.heightAnchor.constraint(equalToConstant: Self.threadRowHeight).isActive = true
 
         return row
     }
@@ -582,10 +553,10 @@ final class PetWindowContentView: NSView {
         }
 
         let threadCount = max(threadSnapshot?.activeThreads.count ?? 0, 1)
-        let rowsHeight = CGFloat(threadCount) * Self.threadRowMinHeight
+        let rowsHeight = CGFloat(threadCount) * Self.threadRowHeight
         let spacingHeight = CGFloat(max(threadCount - 1, 0)) * Self.threadStackSpacing
         let contentHeight = Self.threadPanelVerticalInset * 2 + rowsHeight + spacingHeight
-        return min(Self.threadPanelMaxHeight, max(Self.threadPanelMinHeight, contentHeight))
+        return max(Self.threadPanelMinHeight, contentHeight)
     }
 
     private func updateThreadPanelHeight() {
@@ -598,7 +569,6 @@ private final class ThreadMessageRowView: NSView {
     private static let closeButtonSize: CGFloat = 18
 
     private let thread: PetThreadSnapshot
-    private let onOpen: (PetThreadSnapshot) -> Void
     private let onDismiss: (PetThreadSnapshot) -> Void
     private let glassView = NSGlassEffectView()
     private let contentView = NSView()
@@ -607,11 +577,9 @@ private final class ThreadMessageRowView: NSView {
 
     init(
         thread: PetThreadSnapshot,
-        onOpen: @escaping (PetThreadSnapshot) -> Void,
         onDismiss: @escaping (PetThreadSnapshot) -> Void
     ) {
         self.thread = thread
-        self.onOpen = onOpen
         self.onDismiss = onDismiss
         super.init(frame: .zero)
         setupView()
@@ -644,14 +612,6 @@ private final class ThreadMessageRowView: NSView {
 
     override func mouseExited(with event: NSEvent) {
         closeButton.isHidden = true
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        guard thread.action != nil else {
-            return
-        }
-
-        onOpen(thread)
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
