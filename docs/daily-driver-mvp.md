@@ -1,6 +1,8 @@
 # Daily-driver MVP Task List
 
-This plan turns the current renderer and event runtime into a daily-use local assistant.
+This is a historical implementation plan. The current public-user workflow lives
+in `README.md`; this file is kept to explain how the daily-driver milestone was
+scoped.
 
 ## Priority 0: Publish The Current Milestone
 
@@ -19,7 +21,7 @@ gh repo view --json nameWithOwner,url,visibility
 Acceptance:
 
 - `git status --short --branch` shows `main...origin/main` with no `ahead`.
-- The repository is pushed to the intended remote. Keep it private during internal testing, then switch visibility only after the open-source checklist is complete.
+- The repository is pushed to the intended remote. Public visibility is enabled only after the open-source checklist is complete.
 
 ## Priority 1: Add Source-level Rate Limiting
 
@@ -49,9 +51,12 @@ Verification:
 swift build
 swift run GlobalPetAssistant
 
+PET_TOKEN="$(tr -d '\r\n' < ~/.global-pet-assistant/token)"
+
 for i in {1..25}; do
   curl -sS -o /dev/null -w "%{http_code}\n" \
     -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $PET_TOKEN" \
     -d '{"source":"spam-test","type":"task.tick","level":"running","ttlMs":1000}' \
     http://127.0.0.1:17321/events
 done
@@ -123,7 +128,7 @@ What to do:
 
 Concrete first `open_url` target:
 
-- Open the private GitHub repo in the default browser:
+- Open the GitHub repo in the default browser:
 
 ```text
 https://github.com/Retr0123456/global-pet-assistant

@@ -4,8 +4,15 @@ Global Pet Assistant is a lightweight macOS desktop pet and local notification r
 
 The project goal is to separate the pet into two layers:
 
-- A native macOS pet renderer built with AppKit, SwiftUI, and Core Animation.
+- A native macOS pet renderer built with AppKit and Core Animation.
 - A local event interface that any trusted tool can use to drive pet state, notifications, and actions.
+
+## Status
+
+- Public source beta for macOS 26 and the AppKit Liquid Glass SDK.
+- No notarized downloadable release is published yet; build from source or package a local beta from this checkout.
+- The event API is local-only. Mutating writes require a bearer token generated on first app launch.
+- Pet art is intentionally not bundled beyond the generated placeholder. Users can import compatible local pet packages.
 
 ## Goals
 
@@ -29,7 +36,7 @@ The project goal is to separate the pet into two layers:
 third-party hooks / apps / agents
         |
         v
-global event API
+local event API
         |
         v
 event router + priority queue
@@ -38,19 +45,19 @@ event router + priority queue
 pet state machine
         |
         v
-AppKit / SwiftUI / Core Animation renderer
+AppKit / Core Animation renderer
 ```
 
-## MVP Scope
+## Core Scope
 
 1. Native macOS transparent floating pet window.
 2. Core Animation spritesheet renderer.
 3. Codex-compatible 8x9 pet atlas support.
 4. Local event API over localhost HTTP or Unix domain socket.
 5. `petctl` command-line helper for scripts and agent hooks.
-6. Basic states: `idle`, `running`, `waiting`, `failed`, `review`, and `jumping`.
+6. Pet states: `idle`, `running`, `waiting`, `failed`, `review`, `waving`, `jumping`, `running-left`, and `running-right`.
 7. Click action for the latest actionable notification.
-8. Menu bar controls for show, hide, open pet folder, and quit.
+8. Menu bar and right-click controls for visibility, muting, launch-at-login, display movement, and animation preview.
 
 ## Current Implementation
 

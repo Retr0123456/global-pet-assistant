@@ -1,6 +1,8 @@
 # Desktop Pet Experience Plan
 
-This plan intentionally pauses infrastructure work. The goal is to make the pet feel useful and present on the desktop, not just like a small notification endpoint.
+This is a historical product plan. The current implementation already includes
+the local token boundary, webhook bridge, and preview-state controls; remaining
+items here are future desktop-presence ideas.
 
 ## Priority 0: Keep The Current Runtime Stable
 
@@ -14,7 +16,7 @@ Keep:
 - edge snapping and saved position.
 - release packaging.
 
-Do not prioritize yet:
+Already handled or tracked elsewhere:
 
 - token auth
 - webhook bridge

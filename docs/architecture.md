@@ -13,12 +13,12 @@ The preferred implementation is:
 ```text
 Swift / AppKit
 + transparent NSPanel or NSWindow
-+ SwiftUI or NSView controls
++ NSView controls
 + Core Animation spritesheet renderer
 + local event server
 ```
 
-The first repository implementation uses a Swift Package executable target. AppKit owns the application lifecycle and floating panel. SwiftUI is intentionally deferred until there is a settings or richer menu UI that benefits from it.
+The repository implementation uses a Swift Package executable target. AppKit owns the application lifecycle and floating panel. SwiftUI is intentionally deferred until there is a settings or richer menu UI that benefits from it.
 
 AppKit should own the floating window behavior:
 
@@ -84,7 +84,7 @@ Recommended manifest:
 }
 ```
 
-The app can later add an import command that copies compatible pets from `~/.codex/pets`.
+The app includes `petctl import-codex-pet <name>` to copy compatible local pets from `~/.codex/pets`.
 
 ## Event API
 
@@ -99,7 +99,11 @@ Example commands:
 ```bash
 petctl notify --source codex-cli --level success --title "Task complete"
 petctl state running --source claude-code --message "Editing files"
-curl -X POST http://127.0.0.1:17321/events -d '{"source":"ci","type":"build.failed","level":"danger","title":"CI failed"}'
+PET_TOKEN="$(tr -d '\r\n' < ~/.global-pet-assistant/token)"
+curl -X POST http://127.0.0.1:17321/events \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $PET_TOKEN" \
+  -d '{"source":"ci","type":"build.failed","level":"danger","title":"CI failed"}'
 ```
 
 Recommended event schema:

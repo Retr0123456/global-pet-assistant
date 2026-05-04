@@ -154,7 +154,7 @@ Acceptance:
 
 What to do:
 
-- Keep the current examples, but add install helpers for this machine.
+- Keep the current examples, but add install helpers for a local checkout.
 - Start with repo-local/local-shell hooks rather than depending on unstable private CLI internals.
 
 Commands to add:
