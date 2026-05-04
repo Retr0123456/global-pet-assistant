@@ -190,6 +190,8 @@ swift Tools/GeneratePlaceholderAtlas.swift Sources/GlobalPetAssistant/Resources/
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Desktop Pet Experience Plan](docs/desktop-experience-plan.md)
 - [Daily-driver MVP Task List](docs/daily-driver-mvp.md)
 - [Release Candidate Plan](docs/release-candidate-plan.md)
+- [Post-RC Roadmap](docs/post-rc-roadmap.md)
 - [TODO](TODO.md)

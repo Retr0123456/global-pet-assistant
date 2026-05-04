@@ -13,6 +13,24 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
+    var onPetHoverChanged: ((Bool) -> Void)? {
+        get {
+            petContentView.onHoverChanged
+        }
+        set {
+            petContentView.onHoverChanged = newValue
+        }
+    }
+
+    var onPetDragChanged: ((PetDragDirection?) -> Void)? {
+        get {
+            petContentView.onDragChanged
+        }
+        set {
+            petContentView.onDragChanged = newValue
+        }
+    }
+
     var contextMenuProvider: (() -> NSMenu?)? {
         get {
             petContentView.contextMenuProvider
@@ -160,6 +178,8 @@ final class FloatingPetWindow: NSPanel {
 
 final class PetWindowContentView: NSView {
     var onClick: (() -> Void)?
+    var onHoverChanged: ((Bool) -> Void)?
+    var onDragChanged: ((PetDragDirection?) -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
 
@@ -167,6 +187,7 @@ final class PetWindowContentView: NSView {
     private var mouseDownWindowOrigin: NSPoint?
     private var didDrag = false
     private let clickMovementThreshold: CGFloat = 5
+    private var hoverTrackingArea: NSTrackingArea?
 
     init(wrapping petView: PetSpriteView) {
         super.init(frame: NSRect(origin: .zero, size: petView.intrinsicContentSize))
@@ -188,6 +209,31 @@ final class PetWindowContentView: NSView {
 
     override var mouseDownCanMoveWindow: Bool {
         false
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        hoverTrackingArea = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHoverChanged?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHoverChanged?(false)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -220,6 +266,11 @@ final class PetWindowContentView: NSView {
 
         if delta.distance(to: .zero) > clickMovementThreshold {
             didDrag = true
+            if delta.x < -clickMovementThreshold {
+                onDragChanged?(.left)
+            } else if delta.x > clickMovementThreshold {
+                onDragChanged?(.right)
+            }
         }
     }
 
@@ -236,6 +287,7 @@ final class PetWindowContentView: NSView {
         } else {
             let settledFrame = FloatingPetWindow.settledFrame(window.frame)
             window.setFrame(settledFrame, display: true)
+            onDragChanged?(nil)
             onMoveEnded?(settledFrame.origin)
         }
 

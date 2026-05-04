@@ -4,6 +4,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var petWindow: FloatingPetWindow?
     private var spriteView: PetSpriteView?
+    private var petBehaviorController: PetBehaviorController?
     private var statusItem: NSStatusItem?
     private var pauseEventsItem: NSMenuItem?
     private var muteCurrentSourceItem: NSMenuItem?
@@ -24,12 +25,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let (package, atlas) = try loadDisplayPet()
             NSLog("GlobalPetAssistant loaded pet '\(package.id)' from \(package.directoryURL.path)")
             let spriteView = PetSpriteView(atlas: atlas)
+            let behaviorController = PetBehaviorController(spriteView: spriteView)
             let window = FloatingPetWindow(
                 contentView: spriteView,
                 savedOrigin: AppStorage.loadWindowOrigin()
             )
             window.onPetClick = { [weak self] in
-                self?.performCurrentAction()
+                self?.handlePetClick()
+            }
+            window.onPetHoverChanged = { [weak self] isInside in
+                self?.petBehaviorController?.handleHoverChanged(isInside: isInside)
+            }
+            window.onPetDragChanged = { [weak self] direction in
+                self?.petBehaviorController?.handleDragChanged(direction: direction)
             }
             window.contextMenuProvider = { [weak self] in
                 self?.makePetContextMenu()
@@ -43,11 +51,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             self.petWindow = window
             self.spriteView = spriteView
+            self.petBehaviorController = behaviorController
             installStatusMenu()
             installEventRouter()
             startEventServer()
             window.show()
-            spriteView.play(.idle)
         } catch {
             showStartupError(error)
             NSApp.terminate(nil)
@@ -102,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func installEventRouter() {
         eventRouter = EventRouter { [weak self] state in
             self?.petWindow?.show()
-            self?.spriteView?.play(state)
+            self?.petBehaviorController?.setBaseState(state)
         }
     }
 
@@ -158,7 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openCurrentAction() {
-        performCurrentAction()
+        _ = performCurrentAction()
     }
 
     @objc private func clearCurrentEvent() {
@@ -215,12 +223,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return eventRouter.accept(event)
     }
 
-    private func performCurrentAction() {
+    private func handlePetClick() {
+        let hasAction = eventRouter?.snapshot.hasAction == true
+        petBehaviorController?.handleClick(hasAction: hasAction) { [weak self] in
+            self?.performCurrentAction() ?? false
+        }
+    }
+
+    private func performCurrentAction() -> Bool {
         guard let eventRouter, let action = eventRouter.currentAction else {
-            return
+            return false
         }
 
-        actionHandler.perform(
+        return actionHandler.perform(
             action,
             source: eventRouter.currentSource,
             configuration: appConfiguration

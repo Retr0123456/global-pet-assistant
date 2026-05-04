@@ -1,7 +1,9 @@
 import AppKit
 
 final class PetSpriteView: NSView {
-    static let displayScale: CGFloat = 0.25
+    static let displayScale: CGFloat = 0.5
+    private static let framesPerSecond: TimeInterval = 6.0
+    private static let reducedMotionFrameHoldDuration: TimeInterval = 0.2
     static let displaySize = NSSize(
         width: CGFloat(PetAtlas.cellWidth) * displayScale,
         height: CGFloat(PetAtlas.cellHeight) * displayScale
@@ -12,6 +14,7 @@ final class PetSpriteView: NSView {
     private var timer: Timer?
     private var currentFrames: [CGImage] = []
     private var frameIndex = 0
+    private var playbackGeneration = 0
 
     init(atlas: PetAtlas) {
         self.atlas = atlas
@@ -47,8 +50,10 @@ final class PetSpriteView: NSView {
         CATransaction.commit()
     }
 
-    func play(_ state: PetAnimationState) {
+    func playLoop(_ state: PetAnimationState) {
+        playbackGeneration += 1
         timer?.invalidate()
+        timer = nil
         currentFrames = atlas.frames(for: state)
         frameIndex = 0
         renderCurrentFrame()
@@ -57,11 +62,48 @@ final class PetSpriteView: NSView {
             return
         }
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 8.0, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Self.framesPerSecond, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.advanceFrame()
             }
         }
+    }
+
+    func playOnce(_ state: PetAnimationState, completion: @escaping @MainActor () -> Void) {
+        playbackGeneration += 1
+        let generation = playbackGeneration
+        timer?.invalidate()
+        timer = nil
+        currentFrames = atlas.frames(for: state)
+        frameIndex = 0
+        renderCurrentFrame()
+
+        guard currentFrames.count > 1, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            timer = Timer.scheduledTimer(
+                withTimeInterval: Self.reducedMotionFrameHoldDuration,
+                repeats: false
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.playbackGeneration == generation else {
+                        return
+                    }
+
+                    self.timer = nil
+                    completion()
+                }
+            }
+            return
+        }
+
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Self.framesPerSecond, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.advanceOneShotFrame(generation: generation, completion: completion)
+            }
+        }
+    }
+
+    func play(_ state: PetAnimationState) {
+        playLoop(state)
     }
 
     private func advanceFrame() {
@@ -70,6 +112,30 @@ final class PetSpriteView: NSView {
         }
 
         frameIndex = (frameIndex + 1) % currentFrames.count
+        renderCurrentFrame()
+    }
+
+    private func advanceOneShotFrame(generation: Int, completion: @escaping @MainActor () -> Void) {
+        guard playbackGeneration == generation else {
+            return
+        }
+
+        guard !currentFrames.isEmpty else {
+            timer?.invalidate()
+            timer = nil
+            completion()
+            return
+        }
+
+        let nextFrameIndex = frameIndex + 1
+        guard nextFrameIndex < currentFrames.count else {
+            timer?.invalidate()
+            timer = nil
+            completion()
+            return
+        }
+
+        frameIndex = nextFrameIndex
         renderCurrentFrame()
     }
 
