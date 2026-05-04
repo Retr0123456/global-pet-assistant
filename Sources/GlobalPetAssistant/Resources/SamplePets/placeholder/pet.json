@@ -1,0 +1,6 @@
+{
+  "id": "placeholder",
+  "displayName": "Placeholder Pet",
+  "description": "A generated Codex-compatible atlas for renderer validation.",
+  "spritesheetPath": "spritesheet.png"
+}
