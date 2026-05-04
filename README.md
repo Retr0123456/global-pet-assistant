@@ -178,6 +178,35 @@ prompted. The example hook forwards `SessionStart`, `UserPromptSubmit`,
 the pet app, and `Tools/codex-pet-events.sh enable` to turn them back on. See
 [Codex Hook Integration](docs/codex-hook-integration.md).
 
+Local webhook bridge:
+
+```bash
+swift run pet-webhook-bridge
+```
+
+The bridge is off unless explicitly started. It binds only to `127.0.0.1:17322`,
+requires the same local bearer token for incoming `POST /github-actions`
+requests, and forwards normalized `ci` events to `POST /events` with that token:
+
+```bash
+PET_TOKEN="$(tr -d '\r\n' < ~/.global-pet-assistant/token)"
+
+curl -X POST http://127.0.0.1:17322/github-actions \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $PET_TOKEN" \
+  -d '{
+    "workflow_run": {
+      "id": 12345,
+      "name": "CI",
+      "conclusion": "failure",
+      "html_url": "https://github.com/Retr0123456/global-pet-assistant/actions/runs/12345"
+    },
+    "repository": {
+      "full_name": "Retr0123456/global-pet-assistant"
+    }
+  }'
+```
+
 Pet package commands:
 
 ```bash
@@ -324,7 +353,7 @@ Regenerate the app icon from `Assets/AppIcon/AppIcon.png`:
 Tools/generate-app-icon.sh
 ```
 
-The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, launch-at-login, move-to-next-display, open pet folder, and quit controls. Right-clicking the pet exposes the fast controls: open action, clear current event, mute source, unmute all sources, pause/resume events, and open pet folder. Pet position is saved under `~/.global-pet-assistant` after drag moves, snaps to visible screen edges within 24 px, and is restored on relaunch.
+The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, launch-at-login, move-to-next-display, preview state, open pet folder, and quit controls. Right-clicking the pet exposes the fast controls: open action, clear current event, mute source, unmute all sources, pause/resume events, preview state, and open pet folder. Pet position is saved under `~/.global-pet-assistant` after drag moves, snaps to visible screen edges within 24 px, and is restored on relaunch.
 
 Regenerate the bundled placeholder atlas:
 

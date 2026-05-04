@@ -15,9 +15,16 @@ let package = Package(
         .executable(
             name: "petctl",
             targets: ["petctl"]
+        ),
+        .executable(
+            name: "pet-webhook-bridge",
+            targets: ["petWebhookBridge"]
         )
     ],
     targets: [
+        .target(
+            name: "PetWebhookBridgeCore"
+        ),
         .executableTarget(
             name: "GlobalPetAssistant",
             resources: [
@@ -27,9 +34,16 @@ let package = Package(
         .executableTarget(
             name: "petctl"
         ),
+        .executableTarget(
+            name: "petWebhookBridge",
+            dependencies: ["PetWebhookBridgeCore"]
+        ),
         .testTarget(
             name: "GlobalPetAssistantTests",
-            dependencies: ["GlobalPetAssistant"],
+            dependencies: [
+                "GlobalPetAssistant",
+                "PetWebhookBridgeCore"
+            ],
             swiftSettings: [
                 .unsafeFlags([
                     "-F",

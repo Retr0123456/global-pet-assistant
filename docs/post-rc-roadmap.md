@@ -189,9 +189,13 @@ Acceptance:
 
 ## Priority 5: Add The Local Webhook Bridge
 
+Status: implemented as `pet-webhook-bridge`. The bridge is off unless started,
+binds only to `127.0.0.1`, requires the local bearer token on incoming webhook
+requests, and forwards normalized events to `POST /events` with that token.
+
 What to do:
 
-- Implement the remaining TODO item only after token auth and diagnostics exist.
+- Keep the bridge behind explicit local startup and bearer-token authentication.
 - Keep it explicitly local-only.
 
 Concrete bridge:

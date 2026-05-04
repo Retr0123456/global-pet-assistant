@@ -314,9 +314,11 @@ Acceptance:
 
 ## Priority 7: Decide Whether To Build The Webhook Bridge
 
+Status: implemented as an explicit local-only `pet-webhook-bridge` executable.
+
 What to do:
 
-- Only build this after allowlisting and tests exist.
+- Keep this behind allowlisting, tests, and bearer-token authentication.
 - Keep it local-only by default.
 
 Concrete first bridge:

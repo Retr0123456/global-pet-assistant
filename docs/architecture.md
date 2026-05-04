@@ -206,8 +206,7 @@ Adapters should be thin wrappers around the generic event API:
 
 - `codex-hook-adapter`
 - `claude-code-hook-adapter`
-- `github-actions-adapter`
-- `generic-webhook-adapter`
+- `pet-webhook-bridge`, an explicit local-only GitHub Actions payload bridge
 - local script examples using `petctl`
 
 The first version should prioritize the generic API and `petctl`. Specific adapters can be added after the event contract is stable.

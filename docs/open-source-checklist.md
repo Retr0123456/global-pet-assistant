@@ -36,6 +36,7 @@ Use this checklist before making the repository public.
 
 - [x] Local event server binds to `127.0.0.1`.
 - [x] Local token authentication protects `POST /events`.
+- [x] Local webhook bridge binds to `127.0.0.1` and requires the local token.
 - [x] Event bodies are size-limited.
 - [x] No arbitrary shell-command action is supported.
 - [x] Action execution is source allowlisted.

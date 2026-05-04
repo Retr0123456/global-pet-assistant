@@ -12,6 +12,41 @@ enum PetAnimationState: String, CaseIterable, Codable {
     case running
     case review
 
+    static let previewMenuStates: [PetAnimationState] = [
+        .idle,
+        .running,
+        .waiting,
+        .failed,
+        .review,
+        .waving,
+        .jumping,
+        .runningLeft,
+        .runningRight
+    ]
+
+    var menuTitle: String {
+        switch self {
+        case .idle:
+            "Idle"
+        case .runningRight:
+            "Running Right"
+        case .runningLeft:
+            "Running Left"
+        case .waving:
+            "Waving"
+        case .jumping:
+            "Jumping"
+        case .failed:
+            "Failed"
+        case .waiting:
+            "Waiting"
+        case .running:
+            "Running"
+        case .review:
+            "Review"
+        }
+    }
+
     var row: Int {
         switch self {
         case .idle: 0

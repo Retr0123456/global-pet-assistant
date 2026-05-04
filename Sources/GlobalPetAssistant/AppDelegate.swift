@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.launchAtLoginItem = launchAtLoginItem
 
         menu.addItem(NSMenuItem(title: "Move to Next Display", action: #selector(moveToNextDisplay), keyEquivalent: ""))
+        menu.addItem(makePreviewStateMenuItem())
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
@@ -182,6 +183,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func moveToNextDisplay() {
         petWindow?.moveToNextScreen()
+    }
+
+    @objc private func previewPetState(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let state = PetAnimationState(rawValue: rawValue)
+        else {
+            return
+        }
+
+        petWindow?.show()
+        petBehaviorController?.previewState(state)
+        AuditLogger.appendRuntime(status: "pet_preview_state", message: state.rawValue)
     }
 
     @objc private func togglePauseEvents() {
@@ -334,11 +348,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(pauseItem)
 
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(makePreviewStateMenuItem())
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
 
         menu.items
             .filter { $0.action != nil }
             .forEach { $0.target = self }
         return menu
+    }
+
+    private func makePreviewStateMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Preview State", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+
+        for state in PetAnimationState.previewMenuStates {
+            let stateItem = NSMenuItem(title: state.menuTitle, action: #selector(previewPetState(_:)), keyEquivalent: "")
+            stateItem.representedObject = state.rawValue
+            stateItem.target = self
+            submenu.addItem(stateItem)
+        }
+
+        item.submenu = submenu
+        return item
     }
 }

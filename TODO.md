@@ -17,7 +17,7 @@
 - [x] Implement frame timing for `idle`, `running`, `waiting`, `failed`, `review`, `jumping`, `running-left`, and `running-right`.
 - [x] Add Reduced Motion support.
 - [x] Add drag-to-move and basic click handling.
-- [ ] Add state switching controls for non-idle animations.
+- [x] Add state switching controls for non-idle animations.
 
 ## Phase 2: Pet Packages
 
@@ -72,4 +72,4 @@
 - [x] Add Codex CLI hook examples.
 - [x] Add Claude Code hook examples.
 - [x] Add CI failure notification example.
-- [ ] Add generic webhook-to-local bridge only if a safe local boundary is clear.
+- [x] Add generic webhook-to-local bridge only if a safe local boundary is clear.

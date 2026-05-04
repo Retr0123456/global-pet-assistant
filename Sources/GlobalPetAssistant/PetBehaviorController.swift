@@ -84,6 +84,31 @@ final class PetBehaviorController {
         spriteView.playLoop(direction.animationState)
     }
 
+    func previewState(_ state: PetAnimationState, duration: TimeInterval = 5.0) {
+        guard dragDirection == nil else {
+            return
+        }
+
+        transientToken += 1
+        let token = transientToken
+        isPlayingTransient = true
+        transientTimer?.invalidate()
+        spriteView.playLoop(state)
+
+        transientTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.transientToken == token else {
+                    return
+                }
+
+                self.isPlayingTransient = false
+                if self.dragDirection == nil {
+                    self.spriteView.playLoop(self.baseState)
+                }
+            }
+        }
+    }
+
     private func playReaction(_ state: PetAnimationState) {
         guard dragDirection == nil, !isPlayingTransient else {
             return

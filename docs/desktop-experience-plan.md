@@ -180,6 +180,10 @@ Acceptance:
 
 ## Priority 6: Add State Preview Controls
 
+Status: implemented. The menu bar menu and pet right-click menu now expose
+`Preview State`; each selection previews the chosen atlas row for 5 seconds and
+then returns to the current router state.
+
 What to do:
 
 - Finish the remaining renderer TODO: state switching controls for non-idle animations.
