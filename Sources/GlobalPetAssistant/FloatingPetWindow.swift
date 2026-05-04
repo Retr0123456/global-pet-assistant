@@ -31,6 +31,15 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
+    var onThreadClick: ((PetThreadSnapshot) -> Void)? {
+        get {
+            petContentView.onThreadClick
+        }
+        set {
+            petContentView.onThreadClick = newValue
+        }
+    }
+
     var onThreadDismiss: ((PetThreadSnapshot) -> Void)? {
         get {
             petContentView.onThreadDismiss
@@ -224,6 +233,7 @@ final class PetWindowContentView: NSView {
     var onClick: (() -> Void)?
     var onHoverChanged: ((Bool) -> Void)?
     var onDragChanged: ((PetDragDirection?) -> Void)?
+    var onThreadClick: ((PetThreadSnapshot) -> Void)?
     var onThreadDismiss: ((PetThreadSnapshot) -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
@@ -477,7 +487,7 @@ final class PetWindowContentView: NSView {
         threadStackView.translatesAutoresizingMaskIntoConstraints = false
         threadStackView.orientation = .vertical
         threadStackView.alignment = .width
-        threadStackView.distribution = .fill
+        threadStackView.distribution = .fillEqually
         threadStackView.spacing = Self.threadStackSpacing
 
         NSLayoutConstraint.activate([
@@ -534,6 +544,9 @@ final class PetWindowContentView: NSView {
     private func makeThreadRow(for thread: PetThreadSnapshot) -> NSView {
         let row = ThreadMessageRowView(
             thread: thread,
+            onOpen: { [weak self] thread in
+                self?.onThreadClick?(thread)
+            },
             onDismiss: { [weak self] thread in
                 self?.onThreadDismiss?(thread)
             }
@@ -567,8 +580,10 @@ final class PetWindowContentView: NSView {
 private final class ThreadMessageRowView: NSView {
     private static let cornerRadius: CGFloat = 16
     private static let closeButtonSize: CGFloat = 18
+    private static let fixedHeight: CGFloat = 78
 
     private let thread: PetThreadSnapshot
+    private let onOpen: (PetThreadSnapshot) -> Void
     private let onDismiss: (PetThreadSnapshot) -> Void
     private let glassView = NSGlassEffectView()
     private let contentView = NSView()
@@ -577,9 +592,11 @@ private final class ThreadMessageRowView: NSView {
 
     init(
         thread: PetThreadSnapshot,
+        onOpen: @escaping (PetThreadSnapshot) -> Void,
         onDismiss: @escaping (PetThreadSnapshot) -> Void
     ) {
         self.thread = thread
+        self.onOpen = onOpen
         self.onDismiss = onDismiss
         super.init(frame: .zero)
         setupView()
@@ -587,6 +604,10 @@ private final class ThreadMessageRowView: NSView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: Self.fixedHeight)
     }
 
     override func updateTrackingAreas() {
@@ -612,6 +633,14 @@ private final class ThreadMessageRowView: NSView {
 
     override func mouseExited(with event: NSEvent) {
         closeButton.isHidden = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard thread.action != nil else {
+            return
+        }
+
+        onOpen(thread)
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
@@ -645,15 +674,19 @@ private final class ThreadMessageRowView: NSView {
         directoryLabel.alignment = .right
         directoryLabel.lineBreakMode = .byTruncatingTail
         directoryLabel.maximumNumberOfLines = 1
+        directoryLabel.allowsExpansionToolTips = false
         directoryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let messageLabel = NSTextField(wrappingLabelWithString: thread.messagePreview)
         messageLabel.font = .systemFont(ofSize: 13, weight: .regular)
         messageLabel.textColor = NSColor.white.withAlphaComponent(0.82)
         messageLabel.alignment = .right
-        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.lineBreakMode = .byTruncatingTail
         messageLabel.maximumNumberOfLines = 2
+        messageLabel.allowsExpansionToolTips = false
+        messageLabel.cell?.truncatesLastVisibleLine = true
         messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
         let labelStackView = NSStackView(views: [directoryLabel, messageLabel])
         labelStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -662,6 +695,7 @@ private final class ThreadMessageRowView: NSView {
         labelStackView.distribution = .fill
         labelStackView.spacing = 3
         labelStackView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        labelStackView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         contentView.addSubview(labelStackView)
 
         addSubview(closeButton)
