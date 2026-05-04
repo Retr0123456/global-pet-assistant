@@ -214,7 +214,7 @@ final class FloatingPetWindow: NSPanel {
 
 final class PetWindowContentView: NSView {
     private static let threadPanelMaxWidth: CGFloat = 320
-    private static let threadPanelHeight: CGFloat = 92
+    private static let threadPanelHeight: CGFloat = 72
     private static let threadPanelGap: CGFloat = 8
     private static let badgeSize: CGFloat = 30
 
@@ -456,17 +456,24 @@ final class PetWindowContentView: NSView {
         addSubview(threadPanelView)
         threadPanelView.translatesAutoresizingMaskIntoConstraints = false
         threadPanelView.style = .regular
-        threadPanelView.cornerRadius = 18
-        threadPanelView.tintColor = NSColor.controlAccentColor.withAlphaComponent(0.08)
+        threadPanelView.cornerRadius = 16
+        threadPanelView.clipsToBounds = true
+        threadPanelView.tintColor = NSColor.black.withAlphaComponent(0.82)
         threadPanelView.contentView = threadPanelContentView
 
         threadPanelContentView.translatesAutoresizingMaskIntoConstraints = false
+        threadPanelContentView.wantsLayer = true
+        threadPanelContentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
+        threadPanelContentView.layer?.cornerRadius = 16
+        threadPanelContentView.layer?.borderWidth = 1
+        threadPanelContentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        threadPanelContentView.layer?.masksToBounds = true
         threadPanelContentView.addSubview(threadStackView)
         threadStackView.translatesAutoresizingMaskIntoConstraints = false
         threadStackView.orientation = .vertical
         threadStackView.alignment = .width
         threadStackView.distribution = .fill
-        threadStackView.spacing = 8
+        threadStackView.spacing = 4
 
         NSLayoutConstraint.activate([
             threadPanelContentView.leadingAnchor.constraint(equalTo: threadPanelView.leadingAnchor),
@@ -474,10 +481,10 @@ final class PetWindowContentView: NSView {
             threadPanelContentView.topAnchor.constraint(equalTo: threadPanelView.topAnchor),
             threadPanelContentView.bottomAnchor.constraint(equalTo: threadPanelView.bottomAnchor),
 
-            threadStackView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor, constant: 16),
-            threadStackView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor, constant: -16),
-            threadStackView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: 12),
-            threadStackView.bottomAnchor.constraint(lessThanOrEqualTo: threadPanelContentView.bottomAnchor, constant: -12)
+            threadStackView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor, constant: 12),
+            threadStackView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor, constant: -12),
+            threadStackView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: 8),
+            threadStackView.bottomAnchor.constraint(lessThanOrEqualTo: threadPanelContentView.bottomAnchor, constant: -8)
         ])
     }
 
@@ -521,15 +528,15 @@ final class PetWindowContentView: NSView {
 
     private func makeThreadRow(for thread: PetThreadSnapshot) -> NSView {
         let directoryLabel = NSTextField(labelWithString: thread.directoryName)
-        directoryLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        directoryLabel.textColor = .labelColor
+        directoryLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        directoryLabel.textColor = .white
         directoryLabel.lineBreakMode = .byTruncatingTail
         directoryLabel.maximumNumberOfLines = 1
         directoryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let messageLabel = NSTextField(wrappingLabelWithString: thread.messagePreview)
         messageLabel.font = .systemFont(ofSize: 13, weight: .regular)
-        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.textColor = NSColor.white.withAlphaComponent(0.82)
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.maximumNumberOfLines = 2
         messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -537,7 +544,7 @@ final class PetWindowContentView: NSView {
         let row = NSStackView(views: [directoryLabel, messageLabel])
         row.orientation = .vertical
         row.alignment = .width
-        row.spacing = 5
+        row.spacing = 3
         row.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         if thread.action != nil {
