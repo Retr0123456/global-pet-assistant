@@ -51,21 +51,21 @@
 ## Phase 5: Actions
 
 - [x] Implement `open_url`.
-- [ ] Implement `open_app` by bundle identifier.
-- [ ] Implement `open_file`.
+- [x] Implement `open_app` by bundle identifier.
+- [x] Implement `open_file`.
 - [x] Implement `open_folder`.
-- [ ] Add action allowlisting for unknown sources.
-- [ ] Add right-click menu for clearing or muting notifications.
+- [x] Add action allowlisting for unknown sources.
+- [x] Add right-click menu for clearing or muting notifications.
 
 ## Phase 6: macOS Polish
 
 - [x] Add menu bar icon.
 - [x] Add launch-at-login option.
 - [x] Add multi-display placement.
-- [ ] Add edge snapping.
+- [x] Add edge snapping.
 - [x] Persist pet position.
 - [x] Add pause or do-not-disturb mode.
-- [ ] Add crash recovery behavior.
+- [x] Add crash recovery behavior.
 
 ## Phase 7: Adapters
 

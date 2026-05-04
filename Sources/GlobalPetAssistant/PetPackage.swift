@@ -46,27 +46,23 @@ struct PetPackage: Decodable {
     }
 
     static func loadFirstInstalledPet() throws -> PetPackage {
-        if let appPet = loadFirstInstalledAppPet() {
-            return appPet
-        }
-
-        if let codexPet = loadFirstInstalledCodexPet() {
-            return codexPet
+        if let installedPet = loadInstalledPets().first {
+            return installedPet
         }
 
         return try loadBundledSample()
     }
 
+    static func loadInstalledPets() -> [PetPackage] {
+        loadCompatiblePets(in: AppStorage.petsDirectory) + loadCompatiblePets(in: codexPetsDirectory)
+    }
+
     static func loadFirstInstalledAppPet() -> PetPackage? {
-        loadFirstCompatiblePet(in: AppStorage.petsDirectory)
+        loadCompatiblePets(in: AppStorage.petsDirectory).first
     }
 
     static func loadFirstInstalledCodexPet() -> PetPackage? {
-        let codexPetsDirectory = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".codex", isDirectory: true)
-            .appendingPathComponent("pets", isDirectory: true)
-
-        return loadFirstCompatiblePet(in: codexPetsDirectory)
+        loadCompatiblePets(in: codexPetsDirectory).first
     }
 
     static func load(from directoryURL: URL) throws -> PetPackage {
@@ -90,20 +86,24 @@ struct PetPackage: Decodable {
         return path
     }
 
-    private static func loadFirstCompatiblePet(in petsDirectory: URL) -> PetPackage? {
+    private static var codexPetsDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex", isDirectory: true)
+            .appendingPathComponent("pets", isDirectory: true)
+    }
+
+    private static func loadCompatiblePets(in petsDirectory: URL) -> [PetPackage] {
         guard let petDirectories = try? FileManager.default.contentsOfDirectory(
             at: petsDirectory,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return nil
+            return []
         }
 
         return petDirectories
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .lazy
             .compactMap { try? load(from: $0) }
-            .first
     }
 }
 

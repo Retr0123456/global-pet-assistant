@@ -1,6 +1,7 @@
 import AppKit
 
 final class FloatingPetWindow: NSPanel {
+    private static let edgeSnapThreshold: CGFloat = 24
     private let petContentView: PetWindowContentView
 
     var onPetClick: (() -> Void)? {
@@ -9,6 +10,15 @@ final class FloatingPetWindow: NSPanel {
         }
         set {
             petContentView.onClick = newValue
+        }
+    }
+
+    var contextMenuProvider: (() -> NSMenu?)? {
+        get {
+            petContentView.contextMenuProvider
+        }
+        set {
+            petContentView.contextMenuProvider = newValue
         }
     }
 
@@ -84,6 +94,30 @@ final class FloatingPetWindow: NSPanel {
         return NSRect(origin: NSPoint(x: x, y: y), size: frame.size)
     }
 
+    static func settledFrame(_ frame: NSRect) -> NSRect {
+        let constrainedFrame = Self.constrainedFrame(frame)
+        guard let screen = bestScreen(for: constrainedFrame) else {
+            return constrainedFrame
+        }
+
+        let visibleFrame = screen.visibleFrame
+        var origin = constrainedFrame.origin
+
+        if abs(constrainedFrame.minX - visibleFrame.minX) <= edgeSnapThreshold {
+            origin.x = visibleFrame.minX
+        } else if abs(visibleFrame.maxX - constrainedFrame.maxX) <= edgeSnapThreshold {
+            origin.x = visibleFrame.maxX - constrainedFrame.width
+        }
+
+        if abs(constrainedFrame.minY - visibleFrame.minY) <= edgeSnapThreshold {
+            origin.y = visibleFrame.minY
+        } else if abs(visibleFrame.maxY - constrainedFrame.maxY) <= edgeSnapThreshold {
+            origin.y = visibleFrame.maxY - constrainedFrame.height
+        }
+
+        return Self.constrainedFrame(NSRect(origin: origin, size: constrainedFrame.size))
+    }
+
     private static func initialFrame(size: NSSize, savedOrigin: StoredWindowOrigin?) -> NSRect {
         if let savedOrigin {
             let savedFrame = NSRect(
@@ -127,6 +161,7 @@ final class FloatingPetWindow: NSPanel {
 final class PetWindowContentView: NSView {
     var onClick: (() -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
+    var contextMenuProvider: (() -> NSMenu?)?
 
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
@@ -199,10 +234,25 @@ final class PetWindowContentView: NSView {
         if !didDrag && movedDistance <= clickMovementThreshold {
             onClick?()
         } else {
-            onMoveEnded?(window.frame.origin)
+            let settledFrame = FloatingPetWindow.settledFrame(window.frame)
+            window.setFrame(settledFrame, display: true)
+            onMoveEnded?(settledFrame.origin)
         }
 
         resetMouseTracking()
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let menu = contextMenuProvider?() else {
+            super.rightMouseDown(with: event)
+            return
+        }
+
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        contextMenuProvider?()
     }
 
     private func resetMouseTracking() {

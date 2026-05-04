@@ -15,7 +15,11 @@ RATE_LIMIT_RESPONSE=""
 CODEX_RESPONSE=""
 INVALID_URL_RESPONSE=""
 INVALID_FOLDER_RESPONSE=""
-trap 'kill "$APP_PID" >/dev/null 2>&1 || true; rm -f "$BIG_PAYLOAD" "$BIG_RESPONSE" "$INVALID_STATE_RESPONSE" "$RATE_LIMIT_RESPONSE" "$CODEX_RESPONSE" "$INVALID_URL_RESPONSE" "$INVALID_FOLDER_RESPONSE"' EXIT
+UNKNOWN_ACTION_RESPONSE=""
+UNKNOWN_NOTIFY_RESPONSE=""
+FILE_ACTION_RESPONSE=""
+APP_ACTION_RESPONSE=""
+trap 'kill "$APP_PID" >/dev/null 2>&1 || true; rm -f "$BIG_PAYLOAD" "$BIG_RESPONSE" "$INVALID_STATE_RESPONSE" "$RATE_LIMIT_RESPONSE" "$CODEX_RESPONSE" "$INVALID_URL_RESPONSE" "$INVALID_FOLDER_RESPONSE" "$UNKNOWN_ACTION_RESPONSE" "$UNKNOWN_NOTIFY_RESPONSE" "$FILE_ACTION_RESPONSE" "$APP_ACTION_RESPONSE"' EXIT
 
 sleep 2
 
@@ -82,6 +86,31 @@ if [[ "$STATUS" != "202" ]]; then
   exit 1
 fi
 
+echo "action allowlist: unknown source without action is accepted"
+UNKNOWN_NOTIFY_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-unknown-notify.XXXXXX.json")"
+STATUS="$(curl -sS -o "$UNKNOWN_NOTIFY_RESPONSE" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"unknown-tool","type":"task.completed","level":"success","title":"Unknown source notification","ttlMs":1000}' \
+  http://127.0.0.1:17321/events)"
+if [[ "$STATUS" != "202" ]]; then
+  echo "Expected unknown source without action to return HTTP 202, got $STATUS"
+  cat "$UNKNOWN_NOTIFY_RESPONSE"
+  exit 1
+fi
+
+echo "action allowlist: unknown source with action is rejected"
+UNKNOWN_ACTION_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-unknown-action.XXXXXX.json")"
+STATUS="$(curl -sS -o "$UNKNOWN_ACTION_RESPONSE" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"unknown-tool","type":"task.completed","level":"success","title":"Unknown source action","action":{"type":"open_url","url":"https://github.com/Retr0123456/global-pet-assistant"},"ttlMs":1000}' \
+  http://127.0.0.1:17321/events)"
+if [[ "$STATUS" != "403" ]]; then
+  echo "Expected unknown source action to return HTTP 403, got $STATUS"
+  cat "$UNKNOWN_ACTION_RESPONSE"
+  exit 1
+fi
+grep -q '"error":"action_not_allowed"' "$UNKNOWN_ACTION_RESPONSE"
+
 echo "action validation: petctl accepts an allowed project folder action"
 swift run petctl notify \
   --source local-build \
@@ -91,11 +120,34 @@ swift run petctl notify \
   --ttl-ms 1000 \
   --timeout 5 >/dev/null
 
+echo "action validation: petctl accepts an allowed build log file action"
+mkdir -p /Users/ryanchen/.global-pet-assistant/logs
+echo "example build failure" > /Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log
+swift run petctl notify \
+  --source local-build \
+  --level danger \
+  --title "Open build log" \
+  --action-file "/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log" \
+  --ttl-ms 1000 \
+  --timeout 5 >/dev/null
+
+echo "action validation: allowed app bundle action is accepted"
+APP_ACTION_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-app-action.XXXXXX.json")"
+STATUS="$(curl -sS -o "$APP_ACTION_RESPONSE" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"codex-cli","type":"task.completed","level":"success","title":"Open Codex","action":{"type":"open_app","bundleId":"com.openai.codex"},"ttlMs":1000}' \
+  http://127.0.0.1:17321/events)"
+if [[ "$STATUS" != "202" ]]; then
+  echo "Expected valid app bundle action to return HTTP 202, got $STATUS"
+  cat "$APP_ACTION_RESPONSE"
+  exit 1
+fi
+
 echo "action validation: disallowed URL is rejected"
 INVALID_URL_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-url.XXXXXX.json")"
 STATUS="$(curl -sS -o "$INVALID_URL_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
-  -d '{"source":"manual-invalid-url","type":"task.completed","level":"success","action":{"type":"open_url","url":"ftp://example.com/file"}}' \
+  -d '{"source":"codex-cli","type":"task.completed","level":"success","action":{"type":"open_url","url":"ftp://example.com/file"}}' \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "400" ]]; then
   echo "Expected invalid action URL to return HTTP 400, got $STATUS"
@@ -107,7 +159,7 @@ echo "action validation: non-directory folder action is rejected"
 INVALID_FOLDER_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-folder.XXXXXX.json")"
 STATUS="$(curl -sS -o "$INVALID_FOLDER_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
-  -d '{"source":"manual-invalid-folder","type":"task.completed","level":"success","action":{"type":"open_folder","path":"/Users/ryanchen/codespace/global-pet-assistant/Package.swift"}}' \
+  -d '{"source":"local-build","type":"task.completed","level":"success","action":{"type":"open_folder","path":"/Users/ryanchen/codespace/global-pet-assistant/Package.swift"}}' \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "400" ]]; then
   echo "Expected invalid action folder to return HTTP 400, got $STATUS"

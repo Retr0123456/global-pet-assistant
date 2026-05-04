@@ -66,7 +66,7 @@ private let allowedStates: Set<String> = [
 
 private let usage = """
 Usage:
-  petctl notify --level success --title "Task complete" [--source codex-cli] [--message "..."] [--action-url https://github.com/Retr0123456/global-pet-assistant] [--timeout 5]
+  petctl notify --level success --title "Task complete" [--source codex-cli] [--message "..."] [--action-url https://github.com/Retr0123456/global-pet-assistant] [--action-file ~/.global-pet-assistant/logs/local-build-latest.log] [--action-app com.openai.codex] [--timeout 5]
   petctl state running --message "Working..." [--source codex-cli] [--ttl-ms 15000] [--timeout 5]
   petctl clear [--source codex-cli] [--timeout 5]
   petctl open-folder
@@ -233,8 +233,11 @@ private func takeTimeout(from options: inout [String: String]) throws -> TimeInt
 private func takeAction(from options: inout [String: String]) throws -> PetctlAction? {
     let actionURL = options.removeValue(forKey: "action-url")
     let actionFolder = options.removeValue(forKey: "action-folder")
-    guard actionURL == nil || actionFolder == nil else {
-        throw PetctlError.usage("Use only one action option: --action-url or --action-folder.")
+    let actionFile = options.removeValue(forKey: "action-file")
+    let actionApp = options.removeValue(forKey: "action-app")
+    let actionCount = [actionURL, actionFolder, actionFile, actionApp].compactMap { $0 }.count
+    guard actionCount <= 1 else {
+        throw PetctlError.usage("Use only one action option: --action-url, --action-folder, --action-file, or --action-app.")
     }
 
     if let actionURL {
@@ -243,6 +246,14 @@ private func takeAction(from options: inout [String: String]) throws -> PetctlAc
 
     if let actionFolder {
         return PetctlAction(type: "open_folder", path: actionFolder)
+    }
+
+    if let actionFile {
+        return PetctlAction(type: "open_file", path: actionFile)
+    }
+
+    if let actionApp {
+        return PetctlAction(type: "open_app", bundleId: actionApp)
     }
 
     return nil

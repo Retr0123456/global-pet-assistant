@@ -12,6 +12,7 @@ final class LocalEventServer {
         attributes: .concurrent
     )
     private let rateLimiter: SourceRateLimiter
+    private let configuration: AppConfiguration
     private let onEvent: @MainActor (LocalPetEvent) -> PetAnimationState
     private let onHealth: @MainActor () -> EventRouterSnapshot?
     private var socketFileDescriptor: Int32 = -1
@@ -21,12 +22,14 @@ final class LocalEventServer {
         port: UInt16 = LocalEventServer.defaultPort,
         maxBodyBytes: Int = 16 * 1024,
         rateLimiter: SourceRateLimiter = SourceRateLimiter(),
+        configuration: AppConfiguration = .defaultConfiguration,
         onHealth: @escaping @MainActor () -> EventRouterSnapshot? = { nil },
         onEvent: @escaping @MainActor (LocalPetEvent) -> PetAnimationState
     ) {
         self.port = port
         self.maxBodyBytes = maxBodyBytes
         self.rateLimiter = rateLimiter
+        self.configuration = configuration
         self.onHealth = onHealth
         self.onEvent = onEvent
     }
@@ -153,7 +156,11 @@ final class LocalEventServer {
                 return
             }
 
-            try ActionHandler.validate(event.action)
+            try ActionHandler.validate(
+                event.action,
+                source: event.source,
+                configuration: configuration
+            )
             let selectedState = route(event)
 
             try writeResponse(
@@ -171,6 +178,17 @@ final class LocalEventServer {
                 status: 413,
                 reason: "Payload Too Large",
                 body: ["ok": false, "error": "payload_too_large"]
+            )
+        } catch let error as ActionValidationError where error.isActionAuthorizationFailure {
+            try? writeResponse(
+                to: client,
+                status: 403,
+                reason: "Forbidden",
+                body: [
+                    "ok": false,
+                    "error": "action_not_allowed",
+                    "message": String(describing: error)
+                ]
             )
         } catch {
             try? writeResponse(

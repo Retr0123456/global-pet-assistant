@@ -194,8 +194,11 @@ The event API should be local and locked down:
 - Limit request body size.
 - Rate limit high-volume sources.
 - Validate URLs and file paths before opening.
-- Require confirmation or allowlisting for app-opening actions from unknown sources.
+- Require source allowlisting for all URL, folder, file, and app-opening actions.
+- Reject unknown-source actions while still accepting unknown-source state notifications.
 - Do not expose a network-facing webhook listener by default.
+
+The default source allowlist lives in `~/.global-pet-assistant/config.json`. A broken config is backed up and replaced with defaults on startup so the app does not fail closed into an unusable state.
 
 ## Adapter Strategy
 

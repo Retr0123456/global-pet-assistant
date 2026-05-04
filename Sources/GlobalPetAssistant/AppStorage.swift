@@ -13,6 +13,9 @@ enum AppStorage {
     private static let eventPreferencesURL = rootDirectory
         .appendingPathComponent("event-preferences.json")
 
+    private static let configurationURL = rootDirectory
+        .appendingPathComponent("config.json")
+
     static func ensureLayout() throws {
         try FileManager.default.createDirectory(
             at: petsDirectory,
@@ -48,6 +51,63 @@ enum AppStorage {
         try ensureLayout()
         let data = try JSONEncoder().encode(preferences)
         try data.write(to: eventPreferencesURL, options: [.atomic])
+    }
+
+    static func loadConfiguration(
+        fileManager: FileManager = .default,
+        now: () -> Date = Date.init
+    ) -> AppConfiguration {
+        do {
+            try ensureLayout()
+        } catch {
+            NSLog("GlobalPetAssistant could not create app storage: \(String(describing: error))")
+            return .defaultConfiguration
+        }
+
+        guard fileManager.fileExists(atPath: configurationURL.path) else {
+            saveDefaultConfiguration()
+            return .defaultConfiguration
+        }
+
+        do {
+            let data = try Data(contentsOf: configurationURL)
+            return try JSONDecoder().decode(AppConfiguration.self, from: data)
+        } catch {
+            do {
+                let backupURL = backupURLForInvalidConfiguration(now: now())
+                try fileManager.moveItem(at: configurationURL, to: backupURL)
+                NSLog("GlobalPetAssistant backed up invalid config to \(backupURL.path)")
+            } catch {
+                NSLog("GlobalPetAssistant could not back up invalid config: \(String(describing: error))")
+            }
+
+            saveDefaultConfiguration()
+            return .defaultConfiguration
+        }
+    }
+
+    static func saveConfiguration(_ configuration: AppConfiguration) throws {
+        try ensureLayout()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(configuration)
+        try data.write(to: configurationURL, options: [.atomic])
+    }
+
+    private static func saveDefaultConfiguration() {
+        do {
+            try saveConfiguration(.defaultConfiguration)
+        } catch {
+            NSLog("GlobalPetAssistant could not write default config: \(String(describing: error))")
+        }
+    }
+
+    private static func backupURLForInvalidConfiguration(now: Date) -> URL {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestamp = formatter.string(from: now)
+            .replacingOccurrences(of: ":", with: "-")
+        return rootDirectory.appendingPathComponent("config.invalid-\(timestamp).json")
     }
 }
 

@@ -63,7 +63,7 @@ The repository currently starts with a Swift Package executable instead of an Xc
 - Bundled test pet: `Sources/GlobalPetAssistant/Resources/SamplePets/placeholder`
 - Startup pet loading: first compatible pet in `~/.global-pet-assistant/pets`, then `~/.codex/pets`, then bundled placeholder fallback
 - App-owned state root: `~/.global-pet-assistant`
-- Event safety: localhost-only HTTP, request size limits, source-level rate limiting, and conservative click-action validation
+- Event safety: localhost-only HTTP, request size limits, source-level rate limiting, source action allowlisting, and conservative click-action validation
 
 Build and run:
 
@@ -92,6 +92,16 @@ swift run petctl notify \
   --level warning \
   --title "Open project folder" \
   --action-folder "/Users/ryanchen/codespace/global-pet-assistant"
+swift run petctl notify \
+  --source local-build \
+  --level danger \
+  --title "Open build log" \
+  --action-file "/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log"
+swift run petctl notify \
+  --source codex-cli \
+  --level success \
+  --title "Open Codex" \
+  --action-app "com.openai.codex"
 
 curl -fsS http://127.0.0.1:17321/healthz
 ```
@@ -108,6 +118,8 @@ Source-level rate limits are in memory and reset when the app restarts:
 | unknown/default | 20 events / 60 seconds |
 
 `GET /healthz` and `clear` events are exempt. A limited source receives HTTP `429` with JSON error `rate_limited` and `retryAfterMs`.
+
+Action allowlisting is loaded from `~/.global-pet-assistant/config.json`. The app writes a default config on first launch. If that file becomes invalid JSON or no longer matches the schema, the app backs it up as `config.invalid-<timestamp>.json` and regenerates defaults. Unknown sources can still update pet state, but events with actions are rejected with HTTP `403` and JSON error `action_not_allowed`.
 
 Hook examples live under `examples/hooks/`:
 
@@ -129,6 +141,7 @@ Each example is a thin wrapper around `petctl`. Copy the relevant script into th
 | `PET_TITLE` | Title for notify-style events. |
 | `PET_TTL_MS` | TTL for running/waiting events. |
 | `PET_ACTION_FOLDER` | Folder opened when an actionable failure/success notification is clicked. |
+| `PET_LOG_PATH` | Latest local build log path; defaults to `/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log`. |
 
 Pet package commands:
 
@@ -146,6 +159,12 @@ Manual event-runtime verification:
 Tools/verify-event-runtime.sh
 ```
 
+Run unit tests:
+
+```bash
+swift test
+```
+
 Build a local debug `.app` that can be opened through macOS LaunchServices:
 
 ```bash
@@ -153,7 +172,14 @@ Tools/package-debug-app.sh
 open .build/GlobalPetAssistant.app
 ```
 
-The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, launch-at-login, move-to-next-display, open pet folder, and quit controls. Pet position is saved under `~/.global-pet-assistant` after drag moves and restored on relaunch.
+Build a signed release `.app` zip:
+
+```bash
+Tools/package-release-app.sh
+open .build/release/GlobalPetAssistant.app
+```
+
+The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, launch-at-login, move-to-next-display, open pet folder, and quit controls. Right-clicking the pet exposes the fast controls: open action, clear current event, mute source, unmute all sources, pause/resume events, and open pet folder. Pet position is saved under `~/.global-pet-assistant` after drag moves, snaps to visible screen edges within 24 px, and is restored on relaunch.
 
 Regenerate the bundled placeholder atlas:
 
@@ -165,4 +191,5 @@ swift Tools/GeneratePlaceholderAtlas.swift Sources/GlobalPetAssistant/Resources/
 
 - [Architecture](docs/architecture.md)
 - [Daily-driver MVP Task List](docs/daily-driver-mvp.md)
+- [Release Candidate Plan](docs/release-candidate-plan.md)
 - [TODO](TODO.md)
