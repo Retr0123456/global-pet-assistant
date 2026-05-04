@@ -21,13 +21,13 @@
 
 ## Phase 2: Pet Packages
 
-- [ ] Load custom pets from `~/.global-pet-assistant/pets`.
-- [ ] Parse `pet.json`.
-- [ ] Validate `spritesheetPath` without allowing path traversal.
+- [x] Load custom pets from `~/.global-pet-assistant/pets`.
+- [x] Parse `pet.json`.
+- [x] Validate `spritesheetPath` without allowing path traversal.
 - [x] Support PNG and WebP.
 - [x] Add "Open pet folder" menu item.
 - [x] Load the first compatible Codex pet from `~/.codex/pets` as a development fallback.
-- [ ] Add optional importer from `~/.codex/pets`.
+- [x] Add optional importer from `~/.codex/pets`.
 
 ## Phase 3: Event Runtime
 
@@ -35,7 +35,7 @@
 - [x] Implement local event server.
 - [x] Start with localhost HTTP or Unix domain socket.
 - [x] Add request size limits.
-- [ ] Add source-level rate limiting.
+- [x] Add source-level rate limiting.
 - [x] Add event deduplication.
 - [x] Add notification TTL handling.
 - [x] Implement state priority routing.
@@ -45,31 +45,31 @@
 - [x] Create `petctl notify`.
 - [x] Create `petctl state`.
 - [x] Create `petctl clear`.
-- [ ] Create `petctl open-folder`.
-- [ ] Add shell examples for Codex CLI and Claude Code hooks.
+- [x] Create `petctl open-folder`.
+- [x] Add shell examples for Codex CLI and Claude Code hooks.
 
 ## Phase 5: Actions
 
-- [ ] Implement `open_url`.
+- [x] Implement `open_url`.
 - [ ] Implement `open_app` by bundle identifier.
 - [ ] Implement `open_file`.
-- [ ] Implement `open_folder`.
+- [x] Implement `open_folder`.
 - [ ] Add action allowlisting for unknown sources.
 - [ ] Add right-click menu for clearing or muting notifications.
 
 ## Phase 6: macOS Polish
 
-- [ ] Add menu bar icon.
-- [ ] Add launch-at-login option.
-- [ ] Add multi-display placement.
+- [x] Add menu bar icon.
+- [x] Add launch-at-login option.
+- [x] Add multi-display placement.
 - [ ] Add edge snapping.
-- [ ] Persist pet position.
-- [ ] Add pause or do-not-disturb mode.
+- [x] Persist pet position.
+- [x] Add pause or do-not-disturb mode.
 - [ ] Add crash recovery behavior.
 
 ## Phase 7: Adapters
 
-- [ ] Add Codex CLI hook examples.
-- [ ] Add Claude Code hook examples.
-- [ ] Add CI failure notification example.
+- [x] Add Codex CLI hook examples.
+- [x] Add Claude Code hook examples.
+- [x] Add CI failure notification example.
 - [ ] Add generic webhook-to-local bridge only if a safe local boundary is clear.

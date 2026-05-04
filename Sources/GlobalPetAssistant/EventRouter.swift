@@ -19,6 +19,8 @@ final class EventRouter {
     private var expirationTimer: Timer?
     private var sequence = 0
     private(set) var currentState: PetAnimationState = .idle
+    private(set) var currentAction: LocalPetAction?
+    private(set) var currentSource: String?
 
     init(now: @escaping () -> Date = Date.init, onStateChange: @escaping StateHandler) {
         self.now = now
@@ -29,7 +31,7 @@ final class EventRouter {
     func accept(_ event: LocalPetEvent) -> PetAnimationState {
         pruneExpired()
 
-        if event.isClearEvent || event.state == .idle {
+        if event.clearsRouter {
             clear()
             return currentState
         }
@@ -71,7 +73,17 @@ final class EventRouter {
         dedupeIndex.removeAll()
         expirationTimer?.invalidate()
         expirationTimer = nil
+        currentAction = nil
+        currentSource = nil
         updateCurrentState()
+        return currentState
+    }
+
+    @discardableResult
+    func clearSource(_ source: String) -> PetAnimationState {
+        removeEvent(forSource: source)
+        updateCurrentState()
+        scheduleExpirationTimer()
         return currentState
     }
 
@@ -79,7 +91,9 @@ final class EventRouter {
         pruneExpired()
         return EventRouterSnapshot(
             currentState: currentState,
-            activeEventCount: eventsBySource.count
+            activeEventCount: eventsBySource.count,
+            currentSource: currentSource,
+            hasAction: currentAction != nil
         )
     }
 
@@ -123,6 +137,9 @@ final class EventRouter {
         }
 
         let nextState = selected?.state ?? .idle
+        currentAction = selected?.event.action
+        currentSource = selected?.event.source
+
         guard nextState != currentState else {
             return
         }
@@ -189,4 +206,6 @@ final class EventRouter {
 struct EventRouterSnapshot {
     let currentState: PetAnimationState
     let activeEventCount: Int
+    let currentSource: String?
+    let hasAction: Bool
 }

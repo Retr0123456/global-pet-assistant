@@ -61,8 +61,9 @@ The repository currently starts with a Swift Package executable instead of an Xc
 - Runtime shape: AppKit lifecycle and floating `NSPanel`
 - Renderer shape: Core Animation layer playback from a Codex-compatible atlas
 - Bundled test pet: `Sources/GlobalPetAssistant/Resources/SamplePets/placeholder`
-- Startup pet loading: first compatible pet in `~/.codex/pets`, then bundled placeholder fallback
+- Startup pet loading: first compatible pet in `~/.global-pet-assistant/pets`, then `~/.codex/pets`, then bundled placeholder fallback
 - App-owned state root: `~/.global-pet-assistant`
+- Event safety: localhost-only HTTP, request size limits, source-level rate limiting, and conservative click-action validation
 
 Build and run:
 
@@ -81,11 +82,63 @@ curl -X POST http://127.0.0.1:17321/events \
 swift run petctl notify --level success --title "Task complete"
 swift run petctl state running --message "Working..."
 swift run petctl clear
+swift run petctl notify \
+  --source codex-cli \
+  --level success \
+  --title "Open repo" \
+  --action-url "https://github.com/Retr0123456/global-pet-assistant"
+swift run petctl notify \
+  --source local-build \
+  --level warning \
+  --title "Open project folder" \
+  --action-folder "/Users/ryanchen/codespace/global-pet-assistant"
 
 curl -fsS http://127.0.0.1:17321/healthz
 ```
 
 `/healthz` returns the app liveness status plus the router snapshot (`state` and `activeEvents`) so scripts can distinguish a reachable app from an idle or busy pet.
+
+Source-level rate limits are in memory and reset when the app restarts:
+
+| Source | Limit |
+| --- | ---: |
+| `codex-cli` | 30 events / 60 seconds |
+| `claude-code` | 30 events / 60 seconds |
+| `ci` | 10 events / 60 seconds |
+| unknown/default | 20 events / 60 seconds |
+
+`GET /healthz` and `clear` events are exempt. A limited source receives HTTP `429` with JSON error `rate_limited` and `retryAfterMs`.
+
+Hook examples live under `examples/hooks/`:
+
+```bash
+examples/hooks/codex-task.sh running
+examples/hooks/codex-task.sh success
+examples/hooks/claude-task.sh running
+examples/hooks/local-build.sh swift build
+```
+
+Each example is a thin wrapper around `petctl`. Copy the relevant script into the hook directory used by Codex CLI, Claude Code, or a local build pipeline, or call it in place from this checkout. Common environment variables:
+
+| Variable | Meaning |
+| --- | --- |
+| `PETCTL` | Command used to invoke `petctl`; defaults to `swift run petctl`. |
+| `PET_SOURCE` | Event source; defaults to `codex-cli`, `claude-code`, or `local-build`. |
+| `PET_DEDUPE_KEY` | Dedupe key used to replace repeated task events. |
+| `PET_MESSAGE` | Message shown in the event payload. |
+| `PET_TITLE` | Title for notify-style events. |
+| `PET_TTL_MS` | TTL for running/waiting events. |
+| `PET_ACTION_FOLDER` | Folder opened when an actionable failure/success notification is clicked. |
+
+Pet package commands:
+
+```bash
+swift run petctl open-folder
+swift run petctl import-codex-pet emma
+find ~/.global-pet-assistant/pets/emma -maxdepth 1 -type f
+```
+
+The importer copies `pet.json` and the manifest's referenced spritesheet into the app-owned pet folder. It does not symlink into Codex state.
 
 Manual event-runtime verification:
 
@@ -100,6 +153,8 @@ Tools/package-debug-app.sh
 open .build/GlobalPetAssistant.app
 ```
 
+The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, launch-at-login, move-to-next-display, open pet folder, and quit controls. Pet position is saved under `~/.global-pet-assistant` after drag moves and restored on relaunch.
+
 Regenerate the bundled placeholder atlas:
 
 ```bash
@@ -109,4 +164,5 @@ swift Tools/GeneratePlaceholderAtlas.swift Sources/GlobalPetAssistant/Resources/
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Daily-driver MVP Task List](docs/daily-driver-mvp.md)
 - [TODO](TODO.md)

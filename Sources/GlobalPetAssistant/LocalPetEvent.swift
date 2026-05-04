@@ -97,6 +97,10 @@ struct LocalPetEvent: Codable, Equatable {
         type?.lowercased() == "clear"
     }
 
+    var clearsRouter: Bool {
+        isClearEvent || state == .idle
+    }
+
     var normalizedDedupeKey: String? {
         guard let dedupeKey else {
             return nil

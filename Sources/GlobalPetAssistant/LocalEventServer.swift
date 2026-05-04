@@ -11,6 +11,7 @@ final class LocalEventServer {
         label: "global-pet-assistant.local-event-server.clients",
         attributes: .concurrent
     )
+    private let rateLimiter: SourceRateLimiter
     private let onEvent: @MainActor (LocalPetEvent) -> PetAnimationState
     private let onHealth: @MainActor () -> EventRouterSnapshot?
     private var socketFileDescriptor: Int32 = -1
@@ -19,11 +20,13 @@ final class LocalEventServer {
     init(
         port: UInt16 = LocalEventServer.defaultPort,
         maxBodyBytes: Int = 16 * 1024,
+        rateLimiter: SourceRateLimiter = SourceRateLimiter(),
         onHealth: @escaping @MainActor () -> EventRouterSnapshot? = { nil },
         onEvent: @escaping @MainActor (LocalPetEvent) -> PetAnimationState
     ) {
         self.port = port
         self.maxBodyBytes = maxBodyBytes
+        self.rateLimiter = rateLimiter
         self.onHealth = onHealth
         self.onEvent = onEvent
     }
@@ -110,6 +113,10 @@ final class LocalEventServer {
                 if let snapshot {
                     body["state"] = snapshot.currentState.rawValue
                     body["activeEvents"] = snapshot.activeEventCount
+                    body["hasAction"] = snapshot.hasAction
+                    if let currentSource = snapshot.currentSource {
+                        body["currentSource"] = currentSource
+                    }
                 }
 
                 try writeResponse(
@@ -132,6 +139,21 @@ final class LocalEventServer {
             }
 
             let event = try JSONDecoder().decode(LocalPetEvent.self, from: request.body)
+            if !event.clearsRouter, let rejection = rateLimiter.record(source: event.source) {
+                try writeResponse(
+                    to: client,
+                    status: 429,
+                    reason: "Too Many Requests",
+                    body: [
+                        "ok": false,
+                        "error": "rate_limited",
+                        "retryAfterMs": rejection.retryAfterMs
+                    ]
+                )
+                return
+            }
+
+            try ActionHandler.validate(event.action)
             let selectedState = route(event)
 
             try writeResponse(

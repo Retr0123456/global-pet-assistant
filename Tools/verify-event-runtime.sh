@@ -11,7 +11,11 @@ APP_PID=$!
 BIG_PAYLOAD=""
 BIG_RESPONSE=""
 INVALID_STATE_RESPONSE=""
-trap 'kill "$APP_PID" >/dev/null 2>&1 || true; rm -f "$BIG_PAYLOAD" "$BIG_RESPONSE" "$INVALID_STATE_RESPONSE"' EXIT
+RATE_LIMIT_RESPONSE=""
+CODEX_RESPONSE=""
+INVALID_URL_RESPONSE=""
+INVALID_FOLDER_RESPONSE=""
+trap 'kill "$APP_PID" >/dev/null 2>&1 || true; rm -f "$BIG_PAYLOAD" "$BIG_RESPONSE" "$INVALID_STATE_RESPONSE" "$RATE_LIMIT_RESPONSE" "$CODEX_RESPONSE" "$INVALID_URL_RESPONSE" "$INVALID_FOLDER_RESPONSE"' EXIT
 
 sleep 2
 
@@ -41,6 +45,82 @@ if [[ "$STATUS" != "413" ]]; then
 fi
 echo "body size limit: oversized event rejected with HTTP 413"
 
+echo "rate limit: noisy default source eventually returns HTTP 429"
+RATE_LIMIT_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-rate-limit.XXXXXX.json")"
+RATE_LIMIT_HIT=0
+for _ in {1..25}; do
+  STATUS="$(curl -sS -o "$RATE_LIMIT_RESPONSE" -w '%{http_code}' \
+    -H 'Content-Type: application/json' \
+    -d '{"source":"spam-test","type":"task.tick","level":"running","ttlMs":1000}' \
+    http://127.0.0.1:17321/events)"
+  if [[ "$STATUS" == "429" ]]; then
+    RATE_LIMIT_HIT=1
+    break
+  fi
+done
+if [[ "$RATE_LIMIT_HIT" != "1" ]]; then
+  echo "Expected spam-test burst to hit HTTP 429"
+  cat "$RATE_LIMIT_RESPONSE"
+  exit 1
+fi
+grep -q '"error":"rate_limited"' "$RATE_LIMIT_RESPONSE"
+grep -q '"retryAfterMs":' "$RATE_LIMIT_RESPONSE"
+echo "rate limit: HTTP 429 includes rate_limited and retryAfterMs"
+
+echo "rate limit: clear remains accepted for a rate-limited source"
+swift run petctl clear --source spam-test --timeout 5 >/dev/null
+
+echo "action validation: allowed GitHub URL is accepted"
+CODEX_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-codex-action.XXXXXX.json")"
+STATUS="$(curl -sS -o "$CODEX_RESPONSE" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"codex-cli","type":"task.completed","level":"success","title":"Open repo","action":{"type":"open_url","url":"https://github.com/Retr0123456/global-pet-assistant"},"ttlMs":1000}' \
+  http://127.0.0.1:17321/events)"
+if [[ "$STATUS" != "202" ]]; then
+  echo "Expected valid GitHub action URL to return HTTP 202, got $STATUS"
+  cat "$CODEX_RESPONSE"
+  exit 1
+fi
+
+echo "action validation: petctl accepts an allowed project folder action"
+swift run petctl notify \
+  --source local-build \
+  --level warning \
+  --title "Open project folder" \
+  --action-folder "/Users/ryanchen/codespace/global-pet-assistant" \
+  --ttl-ms 1000 \
+  --timeout 5 >/dev/null
+
+echo "action validation: disallowed URL is rejected"
+INVALID_URL_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-url.XXXXXX.json")"
+STATUS="$(curl -sS -o "$INVALID_URL_RESPONSE" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"manual-invalid-url","type":"task.completed","level":"success","action":{"type":"open_url","url":"ftp://example.com/file"}}' \
+  http://127.0.0.1:17321/events)"
+if [[ "$STATUS" != "400" ]]; then
+  echo "Expected invalid action URL to return HTTP 400, got $STATUS"
+  cat "$INVALID_URL_RESPONSE"
+  exit 1
+fi
+
+echo "action validation: non-directory folder action is rejected"
+INVALID_FOLDER_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-folder.XXXXXX.json")"
+STATUS="$(curl -sS -o "$INVALID_FOLDER_RESPONSE" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"manual-invalid-folder","type":"task.completed","level":"success","action":{"type":"open_folder","path":"/Users/ryanchen/codespace/global-pet-assistant/Package.swift"}}' \
+  http://127.0.0.1:17321/events)"
+if [[ "$STATUS" != "400" ]]; then
+  echo "Expected invalid action folder to return HTTP 400, got $STATUS"
+  cat "$INVALID_FOLDER_RESPONSE"
+  exit 1
+fi
+
+echo "hook example: Codex running event"
+examples/hooks/codex-task.sh running >/dev/null
+
+echo "petctl: clear setup events before manual row checks"
+swift run petctl clear --timeout 5 >/dev/null
+
 echo "curl: level running -> running row"
 curl -sS \
   -H 'Content-Type: application/json' \
@@ -64,6 +144,9 @@ curl -sS \
   http://127.0.0.1:17321/events
 echo
 sleep 2
+
+echo "petctl: clear high-priority failure before direct state checks"
+swift run petctl clear --timeout 5 >/dev/null
 
 echo "petctl: direct state running"
 swift run petctl state running --message "Direct running state"

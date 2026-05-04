@@ -45,24 +45,28 @@ struct PetPackage: Decodable {
         return try decoder.decode(PetPackage.self, from: data)
     }
 
+    static func loadFirstInstalledPet() throws -> PetPackage {
+        if let appPet = loadFirstInstalledAppPet() {
+            return appPet
+        }
+
+        if let codexPet = loadFirstInstalledCodexPet() {
+            return codexPet
+        }
+
+        return try loadBundledSample()
+    }
+
+    static func loadFirstInstalledAppPet() -> PetPackage? {
+        loadFirstCompatiblePet(in: AppStorage.petsDirectory)
+    }
+
     static func loadFirstInstalledCodexPet() -> PetPackage? {
         let codexPetsDirectory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".codex", isDirectory: true)
             .appendingPathComponent("pets", isDirectory: true)
 
-        guard let petDirectories = try? FileManager.default.contentsOfDirectory(
-            at: codexPetsDirectory,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        return petDirectories
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .lazy
-            .compactMap { try? load(from: $0) }
-            .first
+        return loadFirstCompatiblePet(in: codexPetsDirectory)
     }
 
     static func load(from directoryURL: URL) throws -> PetPackage {
@@ -84,6 +88,22 @@ struct PetPackage: Decodable {
         }
 
         return path
+    }
+
+    private static func loadFirstCompatiblePet(in petsDirectory: URL) -> PetPackage? {
+        guard let petDirectories = try? FileManager.default.contentsOfDirectory(
+            at: petsDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        return petDirectories
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .lazy
+            .compactMap { try? load(from: $0) }
+            .first
     }
 }
 
