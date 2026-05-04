@@ -552,6 +552,7 @@ final class PetWindowContentView: NSView {
             }
         )
         row.heightAnchor.constraint(equalToConstant: Self.threadRowHeight).isActive = true
+        row.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth).isActive = true
 
         return row
     }
