@@ -71,6 +71,13 @@ swift build
 swift run GlobalPetAssistant
 ```
 
+Build a local debug `.app` that can be opened through macOS LaunchServices:
+
+```bash
+Tools/package-debug-app.sh
+open .build/GlobalPetAssistant.app
+```
+
 Regenerate the bundled placeholder atlas:
 
 ```bash
