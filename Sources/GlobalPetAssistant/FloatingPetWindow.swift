@@ -247,6 +247,7 @@ final class PetWindowContentView: NSView {
     private var didMouseDownOnPet = false
     private var didDrag = false
     private let clickMovementThreshold: CGFloat = 5
+    private let dragAnimationThreshold: CGFloat = 1.5
     private var hoverTrackingArea: NSTrackingArea?
     private var threadSnapshot: EventRouterSnapshot?
     private var isThreadPanelExpanded = false
@@ -352,11 +353,12 @@ final class PetWindowContentView: NSView {
 
         if delta.distance(to: .zero) > clickMovementThreshold {
             didDrag = true
-            if delta.x < -clickMovementThreshold {
-                onDragChanged?(.left)
-            } else if delta.x > clickMovementThreshold {
-                onDragChanged?(.right)
-            }
+        }
+
+        if delta.x < -dragAnimationThreshold {
+            onDragChanged?(.left)
+        } else if delta.x > dragAnimationThreshold {
+            onDragChanged?(.right)
         }
     }
 
