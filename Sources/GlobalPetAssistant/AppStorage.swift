@@ -7,6 +7,15 @@ enum AppStorage {
     static let petsDirectory = rootDirectory
         .appendingPathComponent("pets", isDirectory: true)
 
+    static let logsDirectory = rootDirectory
+        .appendingPathComponent("logs", isDirectory: true)
+
+    static let eventsLogURL = logsDirectory
+        .appendingPathComponent("events.jsonl")
+
+    static let runtimeLogURL = logsDirectory
+        .appendingPathComponent("runtime.jsonl")
+
     private static let windowOriginURL = rootDirectory
         .appendingPathComponent("window-origin.json")
 
@@ -19,6 +28,10 @@ enum AppStorage {
     static func ensureLayout() throws {
         try FileManager.default.createDirectory(
             at: petsDirectory,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: logsDirectory,
             withIntermediateDirectories: true
         )
     }

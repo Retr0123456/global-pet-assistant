@@ -73,6 +73,21 @@ struct EventRouterTests {
     }
 
     @Test
+    func testNewRunningEventBeatsStaleReviewEvent() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(source: "old-codex-session", level: .success, ttlMs: 300_000))
+        #expect(router.currentState == PetAnimationState.review)
+
+        router.accept(LocalPetEvent(source: "active-codex-session", level: .running, ttlMs: 120_000))
+
+        let snapshot = router.snapshot
+        #expect(snapshot.activeEventCount == 2)
+        #expect(snapshot.currentSource == "active-codex-session")
+        #expect(router.currentState == PetAnimationState.running)
+    }
+
+    @Test
     func testTTLExpiryReturnsRouterToIdle() {
         var now = Date(timeIntervalSince1970: 1_000)
         let router = EventRouter(now: { now }, onStateChange: { _ in })

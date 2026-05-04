@@ -143,10 +143,20 @@ Each example is a thin wrapper around `petctl`. Copy the relevant script into th
 | `PET_ACTION_FOLDER` | Folder opened when an actionable failure/success notification is clicked. |
 | `PET_LOG_PATH` | Latest local build log path; defaults to `/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log`. |
 
+Codex lifecycle hooks are also available through `.codex/config.toml` and `.codex/hooks.json`:
+
+```toml
+[features]
+codex_hooks = true
+```
+
+The repo-local hook forwards `SessionStart`, `UserPromptSubmit`, `PermissionRequest`, and `Stop` to this app's event API after Codex trusts the project config layer. Use `Tools/codex-pet-events.sh disable` to globally stop Codex-side event pushes to the pet app, and `Tools/codex-pet-events.sh enable` to turn them back on. See [Codex Hook Integration](docs/codex-hook-integration.md).
+
 Pet package commands:
 
 ```bash
 swift run petctl open-folder
+swift run petctl open-logs
 swift run petctl import-codex-pet emma
 find ~/.global-pet-assistant/pets/emma -maxdepth 1 -type f
 ```
@@ -157,7 +167,16 @@ Manual event-runtime verification:
 
 ```bash
 Tools/verify-event-runtime.sh
+Tools/verify-codex-hook-events.sh
 ```
+
+Audit logs are written as JSONL under `~/.global-pet-assistant/logs`:
+
+| File | Purpose |
+| --- | --- |
+| `runtime.jsonl` | App startup, pet loading, event-server bind/listen failures, show/hide actions. |
+| `events.jsonl` | Local event API receive/accept/reject decisions, source, type, state, title, TTL, and error details. |
+| `codex-hook-events.jsonl` | Codex hook mapping, disabled/ignored status, send success, and send failure details. |
 
 Run unit tests:
 
@@ -190,6 +209,7 @@ swift Tools/GeneratePlaceholderAtlas.swift Sources/GlobalPetAssistant/Resources/
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Codex Hook Integration](docs/codex-hook-integration.md)
 - [Desktop Pet Experience Plan](docs/desktop-experience-plan.md)
 - [Daily-driver MVP Task List](docs/daily-driver-mvp.md)
 - [Release Candidate Plan](docs/release-candidate-plan.md)

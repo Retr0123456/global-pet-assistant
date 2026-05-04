@@ -126,7 +126,7 @@ Recommended event schema:
 Global notifications can conflict, so the pet needs explicit state priority:
 
 ```text
-failed > waiting > review > running > idle
+failed > waiting > running > review > idle
 ```
 
 Rules:

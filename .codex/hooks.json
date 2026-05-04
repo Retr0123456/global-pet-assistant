@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/codex-pet-event.py\"",
+            "timeout": 5,
+            "statusMessage": "Updating pet session state"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/codex-pet-event.py\"",
+            "timeout": 5,
+            "statusMessage": "Updating pet running state"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/codex-pet-event.py\"",
+            "timeout": 5,
+            "statusMessage": "Updating pet approval state"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/codex-pet-event.py\"",
+            "timeout": 5,
+            "statusMessage": "Updating pet review state"
+          }
+        ]
+      }
+    ]
+  }
+}

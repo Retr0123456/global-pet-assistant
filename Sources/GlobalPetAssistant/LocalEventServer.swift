@@ -39,8 +39,11 @@ final class LocalEventServer {
             return
         }
 
+        AuditLogger.appendRuntime(status: "event_server_starting", message: "Binding 127.0.0.1:\(port)")
+
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else {
+            AuditLogger.appendRuntime(status: "event_server_socket_failed", message: String(cString: strerror(errno)))
             throw LocalEventServerError.socket(String(cString: strerror(errno)))
         }
 
@@ -62,17 +65,20 @@ final class LocalEventServer {
         guard bindResult == 0 else {
             let message = String(cString: strerror(errno))
             close(fd)
+            AuditLogger.appendRuntime(status: "event_server_bind_failed", message: "127.0.0.1:\(port) \(message)")
             throw LocalEventServerError.bind("127.0.0.1:\(port)", message)
         }
 
         guard listen(fd, SOMAXCONN) == 0 else {
             let message = String(cString: strerror(errno))
             close(fd)
+            AuditLogger.appendRuntime(status: "event_server_listen_failed", message: message)
             throw LocalEventServerError.listen(message)
         }
 
         socketFileDescriptor = fd
         isRunning = true
+        AuditLogger.appendRuntime(status: "event_server_started", message: "Listening on 127.0.0.1:\(port)")
         queue.async { [weak self] in
             self?.acceptLoop()
         }
@@ -88,6 +94,7 @@ final class LocalEventServer {
             close(socketFileDescriptor)
             socketFileDescriptor = -1
         }
+        AuditLogger.appendRuntime(status: "event_server_stopped", message: "Stopped 127.0.0.1:\(port)")
     }
 
     private func acceptLoop() {
@@ -142,7 +149,14 @@ final class LocalEventServer {
             }
 
             let event = try JSONDecoder().decode(LocalPetEvent.self, from: request.body)
+            AuditLogger.appendEvent(status: "received", event: event)
             if !event.clearsRouter, let rejection = rateLimiter.record(source: event.source) {
+                AuditLogger.appendEvent(
+                    status: "rejected_rate_limited",
+                    event: event,
+                    httpStatus: 429,
+                    error: "retryAfterMs=\(rejection.retryAfterMs)"
+                )
                 try writeResponse(
                     to: client,
                     status: 429,
@@ -162,6 +176,12 @@ final class LocalEventServer {
                 configuration: configuration
             )
             let selectedState = route(event)
+            AuditLogger.appendEvent(
+                status: "accepted",
+                event: event,
+                state: selectedState,
+                httpStatus: 202
+            )
 
             try writeResponse(
                 to: client,
@@ -173,6 +193,11 @@ final class LocalEventServer {
                 ]
             )
         } catch LocalEventServerError.payloadTooLarge {
+            AuditLogger.appendEvent(
+                status: "rejected_payload_too_large",
+                httpStatus: 413,
+                error: String(describing: LocalEventServerError.payloadTooLarge)
+            )
             try? writeResponse(
                 to: client,
                 status: 413,
@@ -180,6 +205,11 @@ final class LocalEventServer {
                 body: ["ok": false, "error": "payload_too_large"]
             )
         } catch let error as ActionValidationError where error.isActionAuthorizationFailure {
+            AuditLogger.appendEvent(
+                status: "rejected_action_not_allowed",
+                httpStatus: 403,
+                error: String(describing: error)
+            )
             try? writeResponse(
                 to: client,
                 status: 403,
@@ -191,6 +221,11 @@ final class LocalEventServer {
                 ]
             )
         } catch {
+            AuditLogger.appendEvent(
+                status: "rejected_bad_request",
+                httpStatus: 400,
+                error: String(describing: error)
+            )
             try? writeResponse(
                 to: client,
                 status: 400,

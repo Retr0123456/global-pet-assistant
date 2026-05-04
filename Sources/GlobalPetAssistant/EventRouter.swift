@@ -225,9 +225,9 @@ final class EventRouter {
             50
         case .waiting:
             40
-        case .review:
-            30
         case .running, .runningLeft, .runningRight, .jumping, .waving:
+            30
+        case .review:
             20
         case .idle:
             0

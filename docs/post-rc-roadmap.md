@@ -78,6 +78,8 @@ Acceptance:
 
 ## Priority 2: Add Event History And Diagnostics
 
+Status: partially implemented. The app now writes `events.jsonl` and `runtime.jsonl`, and the Codex hook writes `codex-hook-events.jsonl`. Remaining work is a richer diagnostics command and in-app log viewer.
+
 What to do:
 
 - Persist a small local event log.

@@ -27,6 +27,7 @@ struct PetctlRequest {
 enum PetctlCommand {
     case send(PetctlRequest)
     case openFolder
+    case openLogs
     case importCodexPet(String)
 }
 
@@ -70,6 +71,7 @@ Usage:
   petctl state running --message "Working..." [--source codex-cli] [--ttl-ms 15000] [--timeout 5]
   petctl clear [--source codex-cli] [--timeout 5]
   petctl open-folder
+  petctl open-logs
   petctl import-codex-pet emma
 
 Commands:
@@ -77,6 +79,7 @@ Commands:
   state             Switch directly to a pet state: idle, running, waiting, failed, review, jumping, waving, running-left, running-right.
   clear             Clear active events and return the pet to idle.
   open-folder       Open ~/.global-pet-assistant/pets in Finder.
+  open-logs         Open ~/.global-pet-assistant/logs in Finder.
   import-codex-pet  Copy pet.json and the referenced spritesheet from ~/.codex/pets/<name>.
 """
 
@@ -159,6 +162,12 @@ private func parse(_ arguments: [String]) throws -> PetctlCommand {
         }
 
         return .openFolder
+    case "open-logs":
+        guard arguments.count == 1 else {
+            throw PetctlError.usage("open-logs does not accept arguments.")
+        }
+
+        return .openLogs
     case "import-codex-pet":
         guard arguments.count == 2 else {
             throw PetctlError.usage("Usage: petctl import-codex-pet <name>.")
@@ -179,6 +188,8 @@ private func run(_ command: PetctlCommand) throws {
         try send(request)
     case .openFolder:
         try openPetFolder()
+    case .openLogs:
+        try openLogsFolder()
     case .importCodexPet(let name):
         try importCodexPet(named: name)
     }
@@ -282,6 +293,24 @@ private func openPetFolder() throws {
 
     guard process.terminationStatus == 0 else {
         throw PetctlError.requestFailed("Could not open \(appPetsDirectory.path).")
+    }
+}
+
+private func openLogsFolder() throws {
+    let logsDirectory = logsDirectoryURL()
+    try FileManager.default.createDirectory(
+        at: logsDirectory,
+        withIntermediateDirectories: true
+    )
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    process.arguments = [logsDirectory.path]
+    try process.run()
+    process.waitUntilExit()
+
+    guard process.terminationStatus == 0 else {
+        throw PetctlError.requestFailed("Could not open \(logsDirectory.path).")
     }
 }
 
@@ -408,6 +437,12 @@ private func appPetsDirectoryURL() -> URL {
     FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".global-pet-assistant", isDirectory: true)
         .appendingPathComponent("pets", isDirectory: true)
+}
+
+private func logsDirectoryURL() -> URL {
+    FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".global-pet-assistant", isDirectory: true)
+        .appendingPathComponent("logs", isDirectory: true)
 }
 
 private func codexPetsDirectoryURL() -> URL {

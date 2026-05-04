@@ -20,10 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             try AppStorage.ensureLayout()
+            AuditLogger.appendRuntime(status: "app_launching", message: "GlobalPetAssistant applicationDidFinishLaunching")
             appConfiguration = AppStorage.loadConfiguration()
             eventPreferences = AppStorage.loadEventPreferences()
             let (package, atlas) = try loadDisplayPet()
             NSLog("GlobalPetAssistant loaded pet '\(package.id)' from \(package.directoryURL.path)")
+            AuditLogger.appendRuntime(status: "pet_loaded", message: "\(package.id) \(package.directoryURL.path)")
             let spriteView = PetSpriteView(atlas: atlas)
             let behaviorController = PetBehaviorController(spriteView: spriteView)
             let window = FloatingPetWindow(
@@ -56,10 +58,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             installEventRouter()
             startEventServer()
             window.show()
+            AuditLogger.appendRuntime(status: "pet_window_shown", message: "Initial pet window shown")
         } catch {
+            AuditLogger.appendRuntime(status: "startup_failed", message: String(describing: error))
             showStartupError(error)
             NSApp.terminate(nil)
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        eventServer?.stop()
+        AuditLogger.appendRuntime(status: "app_terminating", message: "GlobalPetAssistant applicationWillTerminate")
     }
 
     private func installStatusMenu() {
@@ -136,6 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             eventServer = server
         } catch {
             NSLog("GlobalPetAssistant event server failed to start: \(String(describing: error))")
+            AuditLogger.appendRuntime(status: "event_server_failed", message: String(describing: error))
         }
     }
 
@@ -152,10 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showPet() {
         petWindow?.show()
+        AuditLogger.appendRuntime(status: "pet_window_shown", message: "Show Pet menu item")
     }
 
     @objc private func hidePet() {
         petWindow?.orderOut(nil)
+        AuditLogger.appendRuntime(status: "pet_window_hidden", message: "Hide Pet menu item")
     }
 
     @objc private func openPetFolder() {
@@ -226,6 +238,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return eventRouter.snapshot.currentState
         }
 
+        petWindow?.show()
+        AuditLogger.appendRuntime(status: "pet_window_shown", message: "Accepted event from \(event.source)")
         return eventRouter.accept(event)
     }
 

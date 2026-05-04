@@ -1,0 +1,89 @@
+# Codex Hook Integration
+
+This repository includes a repo-local Codex hook configuration that forwards Codex lifecycle events to the local pet event API at `http://127.0.0.1:17321/events`.
+
+## Official Codex Surface
+
+Codex lifecycle hooks are enabled with:
+
+```toml
+[features]
+codex_hooks = true
+```
+
+Codex loads hooks from `hooks.json` or inline `[hooks]` tables next to active config layers. The useful locations include `~/.codex/hooks.json`, `~/.codex/config.toml`, `<repo>/.codex/hooks.json`, and `<repo>/.codex/config.toml`.
+
+This checkout uses `.codex/config.toml` to enable the feature flag and `.codex/hooks.json` for the hook handlers, so the integration stays repo-local. Codex only loads project-local hooks after the project `.codex/` layer is trusted.
+
+## Event Mapping
+
+The hook script is `.codex/hooks/codex-pet-event.py`. It reads the Codex hook JSON object from stdin and posts a `LocalPetEvent` JSON payload to the app.
+
+| Codex hook | Pet event | Pet state | Purpose |
+| --- | --- | --- | --- |
+| `SessionStart` | `codex.session.start` | `running` | Conversation/session opened or resumed. |
+| `UserPromptSubmit` | `codex.turn.running` | `running` | User submitted a prompt and Codex started work. |
+| `PermissionRequest` | `codex.permission.request` | `waiting` via warning level | Codex is waiting for approval of a command or permission request. |
+| `Stop` | `codex.turn.review` | `review` via success level | Codex finished the turn and the result is ready for review. |
+
+The source is `codex-cli:<session-prefix>` and the dedupe key is `codex:<session_id>`, so repeated lifecycle events for the same Codex thread update one active pet thread instead of creating duplicates.
+
+## Enable The Hooks
+
+This repository already includes `.codex/config.toml`:
+
+```toml
+[features]
+codex_hooks = true
+```
+
+Restart Codex and trust this repository's `.codex/` config layer if prompted. If you prefer a user-level configuration instead, add the same feature flag to `~/.codex/config.toml`.
+
+## Global Push Disable Switch
+
+The hook script supports two Codex-side global off switches. When either switch is active, it exits without contacting the pet app.
+
+Environment variable:
+
+```bash
+export CODEX_PET_EVENTS_DISABLED=1
+```
+
+Persistent local switch:
+
+```bash
+Tools/codex-pet-events.sh disable
+Tools/codex-pet-events.sh status
+Tools/codex-pet-events.sh enable
+```
+
+The persistent switch is the file `~/.codex/global-pet-assistant-disabled`.
+
+## Verification
+
+Validate the hook mapping without contacting the running app:
+
+```bash
+Tools/verify-codex-hook-events.sh
+```
+
+Manually test the app-facing event path:
+
+```bash
+swift run GlobalPetAssistant
+Tools/verify-event-runtime.sh
+```
+
+The hook script intentionally ignores local app connection failures so Codex work is never blocked by the pet app being closed.
+
+## Audit Logs
+
+The Codex hook script and app runtime both write JSONL logs under `~/.global-pet-assistant/logs`:
+
+```bash
+tail -n 50 ~/.global-pet-assistant/logs/codex-hook-events.jsonl
+tail -n 50 ~/.global-pet-assistant/logs/events.jsonl
+tail -n 50 ~/.global-pet-assistant/logs/runtime.jsonl
+```
+
+Use the hook log to confirm whether Codex produced a hook and whether the hook sent or skipped the event. Use the app event log to confirm whether the app accepted, rate-limited, or rejected the payload.
