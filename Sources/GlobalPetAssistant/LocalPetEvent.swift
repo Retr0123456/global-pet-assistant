@@ -13,6 +13,8 @@ struct LocalPetAction: Codable, Equatable {
     var url: String?
     var path: String?
     var bundleId: String?
+    var kittyWindowId: String?
+    var kittyListenOn: String?
 }
 
 struct LocalPetEvent: Codable, Equatable {
@@ -25,6 +27,7 @@ struct LocalPetEvent: Codable, Equatable {
     var ttlMs: Int?
     var dedupeKey: String?
     var action: LocalPetAction?
+    var cwd: String?
 
     enum CodingKeys: String, CodingKey {
         case source
@@ -36,6 +39,7 @@ struct LocalPetEvent: Codable, Equatable {
         case ttlMs
         case dedupeKey
         case action
+        case cwd
     }
 
     init(
@@ -47,7 +51,8 @@ struct LocalPetEvent: Codable, Equatable {
         state: PetAnimationState? = nil,
         ttlMs: Int? = nil,
         dedupeKey: String? = nil,
-        action: LocalPetAction? = nil
+        action: LocalPetAction? = nil,
+        cwd: String? = nil
     ) {
         self.source = source.isEmpty ? "unknown" : source
         self.type = type
@@ -58,6 +63,7 @@ struct LocalPetEvent: Codable, Equatable {
         self.ttlMs = ttlMs
         self.dedupeKey = dedupeKey
         self.action = action
+        self.cwd = cwd
     }
 
     init(from decoder: Decoder) throws {
@@ -72,6 +78,7 @@ struct LocalPetEvent: Codable, Equatable {
         ttlMs = try container.decodeIfPresent(Int.self, forKey: .ttlMs)
         dedupeKey = try container.decodeIfPresent(String.self, forKey: .dedupeKey)
         action = try container.decodeIfPresent(LocalPetAction.self, forKey: .action)
+        cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
     }
 
     var resolvedPetState: PetAnimationState {
@@ -132,5 +139,53 @@ struct LocalPetEvent: Codable, Equatable {
         return candidates
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? source
+    }
+
+    var threadDirectoryName: String {
+        if let directoryName = directoryName(from: cwd) {
+            return directoryName
+        }
+
+        if let actionPath = action?.path {
+            let displayPath = action?.type == "open_file"
+                ? URL(fileURLWithPath: actionPath).deletingLastPathComponent().path
+                : actionPath
+            if let directoryName = directoryName(from: displayPath) {
+                return directoryName
+            }
+        }
+
+        return threadTitle
+    }
+
+    var threadMessagePreview: String {
+        let normalized = threadContext
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return Self.truncate(normalized, limit: 120)
+    }
+
+    private func directoryName(from rawPath: String?) -> String? {
+        guard let rawPath else {
+            return nil
+        }
+
+        let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+
+        let url = URL(fileURLWithPath: trimmed)
+        let lastComponent = url.lastPathComponent
+        return lastComponent.isEmpty ? trimmed : lastComponent
+    }
+
+    private static func truncate(_ text: String, limit: Int) -> String {
+        guard text.count > limit else {
+            return text
+        }
+
+        let endIndex = text.index(text.startIndex, offsetBy: max(0, limit - 1))
+        return text[..<endIndex].trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
 }

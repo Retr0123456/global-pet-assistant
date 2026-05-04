@@ -105,16 +105,16 @@ final class EventRouter {
     private func makeSnapshot() -> EventRouterSnapshot {
         let activeThreads = eventsBySource.values
             .sorted { lhs, rhs in
-                if lhs.priority == rhs.priority {
-                    return lhs.sequence > rhs.sequence
-                }
-                return lhs.priority > rhs.priority
+                lhs.sequence > rhs.sequence
             }
             .map { routedEvent in
                 PetThreadSnapshot(
                     source: routedEvent.event.source,
                     title: routedEvent.event.threadTitle,
                     context: routedEvent.event.threadContext,
+                    directoryName: routedEvent.event.threadDirectoryName,
+                    messagePreview: routedEvent.event.threadMessagePreview,
+                    action: routedEvent.event.action,
                     state: routedEvent.state
                 )
             }
@@ -243,6 +243,9 @@ struct PetThreadSnapshot: Equatable {
     let source: String
     let title: String
     let context: String
+    let directoryName: String
+    let messagePreview: String
+    let action: LocalPetAction?
     let state: PetAnimationState
 }
 

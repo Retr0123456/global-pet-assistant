@@ -8,7 +8,8 @@ PETCTL_COMMAND="${PETCTL:-swift run petctl}"
 PET_SOURCE="${PET_SOURCE:-local-build}"
 PET_DEDUPE_KEY="${PET_DEDUPE_KEY:-local-build:global-pet-assistant}"
 PET_TTL_MS="${PET_TTL_MS:-30000}"
-PET_LOG_PATH="${PET_LOG_PATH:-/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log}"
+PET_LOG_PATH="${PET_LOG_PATH:-$HOME/.global-pet-assistant/logs/local-build-latest.log}"
+PET_ACTION_FOLDER="${PET_ACTION_FOLDER:-$ROOT_DIR}"
 
 run_petctl() {
   ${PETCTL_COMMAND} "$@"
@@ -35,7 +36,7 @@ if "${BUILD_COMMAND[@]}" >"$PET_LOG_PATH" 2>&1; then
     --title "${PET_TITLE:-Local build complete}" \
     --message "${PET_SUCCESS_MESSAGE:-${BUILD_COMMAND[*]} succeeded}" \
     --dedupe-key "$PET_DEDUPE_KEY" \
-    --action-folder "${PET_ACTION_FOLDER:-/Users/ryanchen/codespace/global-pet-assistant}"
+    --action-folder "$PET_ACTION_FOLDER"
 else
   run_petctl notify \
     --source "$PET_SOURCE" \

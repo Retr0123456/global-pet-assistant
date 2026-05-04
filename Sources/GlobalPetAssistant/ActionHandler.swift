@@ -5,16 +5,19 @@ final class ActionHandler {
     private let workspace: NSWorkspace
     private let fileManager: FileManager
     private let applicationURLForBundleIdentifier: (String) -> URL?
+    private let runKittyRemoteControl: ([String]) -> Bool
 
     init(
         workspace: NSWorkspace = .shared,
         fileManager: FileManager = .default,
-        applicationURLForBundleIdentifier: ((String) -> URL?)? = nil
+        applicationURLForBundleIdentifier: ((String) -> URL?)? = nil,
+        runKittyRemoteControl: (([String]) -> Bool)? = nil
     ) {
         self.workspace = workspace
         self.fileManager = fileManager
         self.applicationURLForBundleIdentifier = applicationURLForBundleIdentifier
             ?? { workspace.urlForApplication(withBundleIdentifier: $0) }
+        self.runKittyRemoteControl = runKittyRemoteControl ?? Self.runKittenCommand(arguments:)
     }
 
     @discardableResult
@@ -52,6 +55,15 @@ final class ActionHandler {
                 let configuration = NSWorkspace.OpenConfiguration()
                 workspace.openApplication(at: url, configuration: configuration)
                 return true
+            case .kittyWindow(let windowID, let listenOn):
+                return runKittyRemoteControl([
+                    "@",
+                    "--to",
+                    listenOn,
+                    "focus-window",
+                    "--match",
+                    "id:\(windowID)"
+                ])
             }
         } catch {
             NSLog("GlobalPetAssistant rejected action: \(String(describing: error))")
@@ -158,6 +170,21 @@ final class ActionHandler {
             }
 
             return .app(url)
+        case "focus_kitty_window":
+            guard let windowID = action.kittyWindowId?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !windowID.isEmpty,
+                  Int(windowID) != nil
+            else {
+                throw ActionValidationError.invalidKittyWindowID(action.kittyWindowId ?? "")
+            }
+
+            guard let listenOn = action.kittyListenOn?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  listenOn.hasPrefix("unix:") || listenOn.hasPrefix("tcp:")
+            else {
+                throw ActionValidationError.invalidKittyListenOn(action.kittyListenOn ?? "")
+            }
+
+            return .kittyWindow(windowID: windowID, listenOn: listenOn)
         default:
             throw ActionValidationError.unsupportedActionType(action.type)
         }
@@ -186,6 +213,32 @@ final class ActionHandler {
                 path == root || path.hasPrefix(root + "/")
             }
     }
+
+    private static func runKittenCommand(arguments: [String]) -> Bool {
+        let candidates = [
+            "/Applications/kitty.app/Contents/MacOS/kitten",
+            "/opt/homebrew/bin/kitten",
+            "/usr/local/bin/kitten"
+        ]
+
+        guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            NSLog("GlobalPetAssistant could not find kitten executable for kitty remote control.")
+            return false
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            NSLog("GlobalPetAssistant kitty remote control failed: \(String(describing: error))")
+            return false
+        }
+    }
 }
 
 private enum ActionTarget {
@@ -193,6 +246,7 @@ private enum ActionTarget {
     case folder(URL)
     case file(URL)
     case app(URL)
+    case kittyWindow(windowID: String, listenOn: String)
 }
 
 enum ActionValidationError: Error, CustomStringConvertible {
@@ -209,6 +263,8 @@ enum ActionValidationError: Error, CustomStringConvertible {
     case invalidBundleID(String)
     case disallowedBundleID(String)
     case applicationDoesNotExist(String)
+    case invalidKittyWindowID(String)
+    case invalidKittyListenOn(String)
 
     var isActionAuthorizationFailure: Bool {
         switch self {
@@ -221,7 +277,9 @@ enum ActionValidationError: Error, CustomStringConvertible {
              .invalidFilePath,
              .fileDoesNotExist,
              .invalidBundleID,
-             .applicationDoesNotExist:
+             .applicationDoesNotExist,
+             .invalidKittyWindowID,
+             .invalidKittyListenOn:
             return false
         }
     }
@@ -254,6 +312,10 @@ enum ActionValidationError: Error, CustomStringConvertible {
             "Action app bundle identifier is not allowed: \(bundleID)."
         case .applicationDoesNotExist(let bundleID):
             "Action app bundle identifier could not be resolved: \(bundleID)."
+        case .invalidKittyWindowID(let windowID):
+            "Invalid kitty window id: \(windowID)."
+        case .invalidKittyListenOn(let listenOn):
+            "Invalid kitty listen socket: \(listenOn)."
         }
     }
 }

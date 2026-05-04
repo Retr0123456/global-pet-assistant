@@ -67,12 +67,12 @@ private let allowedStates: Set<String> = [
 
 private let usage = """
 Usage:
-  petctl notify --level success --title "Task complete" [--source codex-cli] [--message "..."] [--action-url https://github.com/Retr0123456/global-pet-assistant] [--action-file ~/.global-pet-assistant/logs/local-build-latest.log] [--action-app com.openai.codex] [--timeout 5]
+  petctl notify --level success --title "Task complete" [--source codex-cli] [--message "..."] [--action-url https://github.com/example/global-pet-assistant] [--action-file ~/.global-pet-assistant/logs/local-build-latest.log] [--action-app com.openai.codex] [--timeout 5]
   petctl state running --message "Working..." [--source codex-cli] [--ttl-ms 15000] [--timeout 5]
   petctl clear [--source codex-cli] [--timeout 5]
   petctl open-folder
   petctl open-logs
-  petctl import-codex-pet emma
+  petctl import-codex-pet <name>
 
 Commands:
   notify            Send a notification event. Levels: info, running, success, warning, danger.

@@ -63,13 +63,38 @@ struct EventRouterTests {
             level: .running,
             title: "Design personal knowledge base architecture",
             message: "Submitted 62cea60 and created the GitHub Actions deploy task.",
-            ttlMs: 10_000
+            ttlMs: 10_000,
+            cwd: "/tmp/global-pet-assistant"
         ))
 
         let thread = router.snapshot.activeThreads.first
         #expect(thread?.title == "Design personal knowledge base architecture")
         #expect(thread?.context == "Submitted 62cea60 and created the GitHub Actions deploy task.")
+        #expect(thread?.directoryName == "global-pet-assistant")
+        #expect(thread?.messagePreview == "Submitted 62cea60 and created the GitHub Actions deploy task.")
         #expect(thread?.state == .running)
+    }
+
+    @Test
+    func testSnapshotPreviewCompactsLongMultilineMessages() {
+        let router = EventRouter(onStateChange: { _ in })
+        let longMessage = """
+        Hello~
+        This is a longer message preview that should be compacted into a single readable line before it is shown in the message area.
+        """
+
+        router.accept(LocalPetEvent(
+            source: "codex-cli",
+            level: .running,
+            message: longMessage,
+            ttlMs: 10_000,
+            cwd: "/tmp/global-pet-assistant"
+        ))
+
+        let thread = router.snapshot.activeThreads.first
+        #expect(thread?.directoryName == "global-pet-assistant")
+        #expect(thread?.messagePreview.hasPrefix("Hello~ This is a longer message preview") == true)
+        #expect(thread?.messagePreview.hasSuffix("…") == true)
     }
 
     @Test
@@ -85,6 +110,29 @@ struct EventRouterTests {
         #expect(snapshot.activeEventCount == 2)
         #expect(snapshot.currentSource == "active-codex-session")
         #expect(router.currentState == PetAnimationState.running)
+    }
+
+    @Test
+    func testSnapshotThreadsAreNewestFirst() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(
+            source: "older",
+            level: .danger,
+            message: "Older high-priority failure",
+            ttlMs: 300_000
+        ))
+        router.accept(LocalPetEvent(
+            source: "newer",
+            level: .running,
+            message: "Newest running message",
+            ttlMs: 120_000
+        ))
+
+        let snapshot = router.snapshot
+        #expect(snapshot.currentSource == "older")
+        #expect(snapshot.activeThreads.first?.source == "newer")
+        #expect(snapshot.activeThreads.first?.context == "Newest running message")
     }
 
     @Test

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -69,10 +70,14 @@ def is_disabled() -> bool:
 
 def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     hook_name = str(payload.get("hook_event_name") or "")
-    session_id = str(payload.get("session_id") or payload.get("thread-id") or "unknown")
-    turn_id = str(payload.get("turn_id") or payload.get("turn-id") or "")
     cwd = str(payload.get("cwd") or "")
-    source = f"codex-cli:{short_id(session_id)}"
+    session_id = first_nonempty(
+        payload,
+        ["session_id", "session-id", "thread_id", "thread-id", "conversation_id", "conversation-id"],
+        fallback=f"unknown:{os.getppid()}:{cwd or 'no-cwd'}",
+    )
+    turn_id = first_nonempty(payload, ["turn_id", "turn-id"], fallback="")
+    source = f"codex-cli:{stable_session_key(session_id)}"
     dedupe_key = f"codex:{session_id}"
 
     if hook_name == "SessionStart":
@@ -82,7 +87,9 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "type": "codex.session.start",
             "state": "running",
             "title": "Codex session started",
-            "message": compact_context([source_name, cwd]),
+            "message": compact_context([source_name]),
+            "cwd": cwd,
+            "action": kitty_focus_action(),
             "ttlMs": 30000,
             "dedupeKey": dedupe_key,
         }
@@ -94,7 +101,9 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "type": "codex.turn.running",
             "state": "running",
             "title": title_from_text(prompt, fallback="Codex is running"),
-            "message": compact_context([prompt, cwd]),
+            "message": compact_context([prompt]),
+            "cwd": cwd,
+            "action": kitty_focus_action(),
             "ttlMs": 120000,
             "dedupeKey": dedupe_key,
         }
@@ -110,7 +119,9 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "type": "codex.permission.request",
             "level": "warning",
             "title": "Codex is waiting for approval",
-            "message": compact_context([tool_name, description, cwd]),
+            "message": compact_context([tool_name, description]),
+            "cwd": cwd,
+            "action": kitty_focus_action(),
             "ttlMs": 300000,
             "dedupeKey": dedupe_key,
         }
@@ -122,7 +133,9 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "type": "codex.turn.review",
             "level": "success",
             "title": title_from_text(last_message, fallback="Codex task ready for review"),
-            "message": compact_context([last_message, cwd]),
+            "message": compact_context([last_message]),
+            "cwd": cwd,
+            "action": kitty_focus_action(),
             "ttlMs": 300000,
             "dedupeKey": dedupe_key,
         }
@@ -130,9 +143,37 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
-def short_id(value: str) -> str:
+def first_nonempty(payload: Dict[str, Any], keys: List[str], fallback: str) -> str:
+    for key in keys:
+        value = str(payload.get(key) or "").strip()
+        if value:
+            return value
+    return fallback
+
+
+def stable_session_key(value: str) -> str:
+    cleaned = cleaned_id(value)
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+    if cleaned == "unknown":
+        return f"unknown-{digest}"
+    return f"{cleaned[:8]}-{digest}"
+
+
+def cleaned_id(value: str) -> str:
     cleaned = "".join(char for char in value if char.isalnum() or char in {"-", "_"})
-    return (cleaned or "unknown")[:12]
+    return cleaned or "unknown"
+
+
+def kitty_focus_action() -> Optional[Dict[str, str]]:
+    window_id = os.environ.get("KITTY_WINDOW_ID", "").strip()
+    listen_on = os.environ.get("KITTY_LISTEN_ON", "").strip()
+    if not window_id or not listen_on:
+        return None
+    return {
+        "type": "focus_kitty_window",
+        "kittyWindowId": window_id,
+        "kittyListenOn": listen_on,
+    }
 
 
 def title_from_text(text: str, fallback: str) -> str:

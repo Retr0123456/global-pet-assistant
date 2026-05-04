@@ -1,2 +1,31 @@
-.build/
 .DS_Store
+.build/
+.swiftpm/
+DerivedData/
+
+# Local editor and Xcode state
+*.xcuserstate
+*.xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Local release artifacts
+*.app
+*.dSYM
+*.xcarchive
+*.zip
+*.dmg
+*.pkg
+*.sha256
+
+# Signing and local secrets
+*.p12
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*
+
+# Local Codex project config. Public hook templates live in examples/codex-hooks.
+.codex/
+
+# Generated app-icon intermediate. Keep AppIcon.png and AppIcon.icns.
+Assets/AppIcon/AppIcon.iconset/

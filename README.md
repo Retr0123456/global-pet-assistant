@@ -57,10 +57,12 @@ AppKit / SwiftUI / Core Animation renderer
 The repository currently starts with a Swift Package executable instead of an Xcode project. This keeps the first implementation buildable with the installed Swift toolchain and avoids depending on `xcodebuild`.
 
 - App name: `GlobalPetAssistant`
-- Future app bundle identifier: `com.ryanchen.GlobalPetAssistant`
+- App bundle identifier: `io.github.globalpetassistant.GlobalPetAssistant`
+- Minimum platform: macOS 26 with the AppKit Liquid Glass SDK
 - Runtime shape: AppKit lifecycle and floating `NSPanel`
-- Renderer shape: Core Animation layer playback from a Codex-compatible atlas
+- Renderer shape: Core Animation layer playback from a Codex-compatible atlas, with Liquid Glass AppKit controls for notification surfaces
 - Bundled test pet: `Sources/GlobalPetAssistant/Resources/SamplePets/placeholder`
+- App icon: original generated image under `Assets/AppIcon`
 - Startup pet loading: first compatible pet in `~/.global-pet-assistant/pets`, then `~/.codex/pets`, then bundled placeholder fallback
 - App-owned state root: `~/.global-pet-assistant`
 - Event safety: localhost-only HTTP, request size limits, source-level rate limiting, source action allowlisting, and conservative click-action validation
@@ -86,17 +88,17 @@ swift run petctl notify \
   --source codex-cli \
   --level success \
   --title "Open repo" \
-  --action-url "https://github.com/Retr0123456/global-pet-assistant"
+  --action-url "https://github.com/example/global-pet-assistant"
 swift run petctl notify \
   --source local-build \
   --level warning \
   --title "Open project folder" \
-  --action-folder "/Users/ryanchen/codespace/global-pet-assistant"
+  --action-folder "$PWD"
 swift run petctl notify \
   --source local-build \
   --level danger \
   --title "Open build log" \
-  --action-file "/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log"
+  --action-file "$HOME/.global-pet-assistant/logs/local-build-latest.log"
 swift run petctl notify \
   --source codex-cli \
   --level success \
@@ -141,27 +143,48 @@ Each example is a thin wrapper around `petctl`. Copy the relevant script into th
 | `PET_TITLE` | Title for notify-style events. |
 | `PET_TTL_MS` | TTL for running/waiting events. |
 | `PET_ACTION_FOLDER` | Folder opened when an actionable failure/success notification is clicked. |
-| `PET_LOG_PATH` | Latest local build log path; defaults to `/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log`. |
+| `PET_LOG_PATH` | Latest local build log path; defaults to `~/.global-pet-assistant/logs/local-build-latest.log`. |
 
-Codex lifecycle hooks are also available through `.codex/config.toml` and `.codex/hooks.json`:
+Codex lifecycle hooks are available as opt-in examples under `examples/codex-hooks/`.
+They are not enabled by default in the public checkout.
+
+To enable them for this repository:
+
+```bash
+mkdir -p .codex
+cp examples/codex-hooks/config.toml .codex/config.toml
+cp examples/codex-hooks/hooks.json .codex/hooks.json
+```
+
+The example config enables:
 
 ```toml
 [features]
 codex_hooks = true
 ```
 
-The repo-local hook forwards `SessionStart`, `UserPromptSubmit`, `PermissionRequest`, and `Stop` to this app's event API after Codex trusts the project config layer. Use `Tools/codex-pet-events.sh disable` to globally stop Codex-side event pushes to the pet app, and `Tools/codex-pet-events.sh enable` to turn them back on. See [Codex Hook Integration](docs/codex-hook-integration.md).
+After restarting Codex, trust this repository's `.codex/` config layer if
+prompted. The example hook forwards `SessionStart`, `UserPromptSubmit`,
+`PermissionRequest`, and `Stop` to this app's event API. Use
+`Tools/codex-pet-events.sh disable` to globally stop Codex-side event pushes to
+the pet app, and `Tools/codex-pet-events.sh enable` to turn them back on. See
+[Codex Hook Integration](docs/codex-hook-integration.md).
 
 Pet package commands:
 
 ```bash
 swift run petctl open-folder
 swift run petctl open-logs
-swift run petctl import-codex-pet emma
-find ~/.global-pet-assistant/pets/emma -maxdepth 1 -type f
+swift run petctl import-codex-pet <name>
+find ~/.global-pet-assistant/pets/<name> -maxdepth 1 -type f
 ```
 
 The importer copies `pet.json` and the manifest's referenced spritesheet into the app-owned pet folder. It does not symlink into Codex state.
+
+Pet packages are not open-sourced by default. The app can render
+Codex-compatible pet packages directly, but third-party pet spritesheets or
+character art should only be committed when their redistribution license is
+clear. See [Assets And Licensing](docs/assets-and-licensing.md).
 
 Manual event-runtime verification:
 
@@ -191,11 +214,105 @@ Tools/package-debug-app.sh
 open .build/GlobalPetAssistant.app
 ```
 
-Build a signed release `.app` zip:
+Build an ad-hoc signed release `.app` zip and checksum:
 
 ```bash
 Tools/package-release-app.sh
 open .build/release/GlobalPetAssistant.app
+```
+
+In restricted agent sandboxes where SwiftPM's own sandbox cannot start, set:
+
+```bash
+SWIFT_BUILD_FLAGS=--disable-sandbox Tools/package-release-app.sh
+```
+
+## Install
+
+Local beta install from a built checkout:
+
+```bash
+Tools/package-release-app.sh
+ditto .build/release/GlobalPetAssistant.app /Applications/GlobalPetAssistant.app
+open /Applications/GlobalPetAssistant.app
+curl -fsS http://127.0.0.1:17321/healthz
+```
+
+If installing from a release zip:
+
+```bash
+shasum -a 256 -c GlobalPetAssistant.zip.sha256
+ditto -x -k GlobalPetAssistant.zip .
+ditto GlobalPetAssistant.app /Applications/GlobalPetAssistant.app
+open /Applications/GlobalPetAssistant.app
+```
+
+`petctl` currently runs from a source checkout:
+
+```bash
+swift run petctl notify --level success --title "Installed app is reachable"
+```
+
+## Upgrade
+
+```bash
+Tools/package-release-app.sh
+osascript -e 'tell application "Global Pet Assistant" to quit' || true
+ditto .build/release/GlobalPetAssistant.app /Applications/GlobalPetAssistant.app
+open /Applications/GlobalPetAssistant.app
+```
+
+App state, logs, preferences, and imported pet packages live under
+`~/.global-pet-assistant` and are not removed by replacing the app bundle.
+
+## Uninstall
+
+Quit the app from the menu bar, then remove the app bundle:
+
+```bash
+rm -rf /Applications/GlobalPetAssistant.app
+```
+
+Remove app-owned state only if you also want to delete logs, preferences, and
+imported pet packages:
+
+```bash
+rm -rf ~/.global-pet-assistant
+```
+
+If you installed local Codex hook examples, remove the local project hook layer:
+
+```bash
+rm -rf .codex
+```
+
+## Runtime Files
+
+Global Pet Assistant stores local state in `~/.global-pet-assistant`:
+
+| Path | Purpose |
+| --- | --- |
+| `config.json` | Source action allowlist. |
+| `event-preferences.json` | Pause and muted-source preferences. |
+| `window-origin.json` | Saved pet position. |
+| `pets/` | App-owned imported pet packages. |
+| `logs/` | Runtime, event, and hook audit logs. |
+
+Launch-at-login is controlled from the menu bar item. Enabling it registers the
+installed app with macOS Login Items; disabling it removes that registration.
+
+## Release Identity
+
+- Bundle identifier: `io.github.globalpetassistant.GlobalPetAssistant`.
+- Current package script: ad-hoc signed local beta zip.
+- Public downloadable releases should use Developer ID signing and notarization.
+- `Tools/package-release-app.sh` writes `GlobalPetAssistant.zip.sha256` next to
+  the release zip.
+
+Regenerate the app icon from `Assets/AppIcon/AppIcon.png`:
+
+```bash
+Tools/generate-app-icon.sh
 ```
 
 The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, launch-at-login, move-to-next-display, open pet folder, and quit controls. Right-clicking the pet exposes the fast controls: open action, clear current event, mute source, unmute all sources, pause/resume events, and open pet folder. Pet position is saved under `~/.global-pet-assistant` after drag moves, snaps to visible screen edges within 24 px, and is restored on relaunch.
@@ -209,9 +326,14 @@ swift Tools/GeneratePlaceholderAtlas.swift Sources/GlobalPetAssistant/Resources/
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Assets And Licensing](docs/assets-and-licensing.md)
 - [Codex Hook Integration](docs/codex-hook-integration.md)
 - [Desktop Pet Experience Plan](docs/desktop-experience-plan.md)
 - [Daily-driver MVP Task List](docs/daily-driver-mvp.md)
 - [Release Candidate Plan](docs/release-candidate-plan.md)
 - [Post-RC Roadmap](docs/post-rc-roadmap.md)
+- [Open Source Checklist](docs/open-source-checklist.md)
+- [Security Policy](SECURITY.md)
+- [Privacy](PRIVACY.md)
+- [Contributing](CONTRIBUTING.md)
 - [TODO](TODO.md)

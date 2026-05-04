@@ -31,6 +31,15 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
+    var onThreadClick: ((PetThreadSnapshot) -> Void)? {
+        get {
+            petContentView.onThreadClick
+        }
+        set {
+            petContentView.onThreadClick = newValue
+        }
+    }
+
     var contextMenuProvider: (() -> NSMenu?)? {
         get {
             petContentView.contextMenuProvider
@@ -76,7 +85,7 @@ final class FloatingPetWindow: NSPanel {
     }
 
     override var canBecomeKey: Bool {
-        true
+        false
     }
 
     func show() {
@@ -204,14 +213,15 @@ final class FloatingPetWindow: NSPanel {
 }
 
 final class PetWindowContentView: NSView {
-    private static let threadPanelWidth: CGFloat = 528
-    private static let threadPanelHeight: CGFloat = 106
+    private static let threadPanelMaxWidth: CGFloat = 320
+    private static let threadPanelHeight: CGFloat = 92
     private static let threadPanelGap: CGFloat = 8
-    private static let badgeSize: CGFloat = 44
+    private static let badgeSize: CGFloat = 30
 
     var onClick: (() -> Void)?
     var onHoverChanged: ((Bool) -> Void)?
     var onDragChanged: ((PetDragDirection?) -> Void)?
+    var onThreadClick: ((PetThreadSnapshot) -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
     var onDesiredSizeChanged: (() -> Void)?
@@ -222,14 +232,15 @@ final class PetWindowContentView: NSView {
         }
 
         return NSSize(
-            width: max(petView.intrinsicContentSize.width, Self.threadPanelWidth),
+            width: max(petView.intrinsicContentSize.width, Self.threadPanelMaxWidth),
             height: petView.intrinsicContentSize.height + Self.threadPanelGap + Self.threadPanelHeight
         )
     }
 
     private let petView: PetSpriteView
     private let threadBadgeButton = NSButton()
-    private let threadPanelView = NSView()
+    private let threadPanelView = NSGlassEffectView()
+    private let threadPanelContentView = NSView()
     private let threadStackView = NSStackView()
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
@@ -263,8 +274,8 @@ final class PetWindowContentView: NSView {
             threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.badgeSize),
             threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.badgeSize),
 
-            threadPanelView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            threadPanelView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            threadPanelView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            threadPanelView.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth),
             threadPanelView.topAnchor.constraint(equalTo: petView.bottomAnchor, constant: Self.threadPanelGap),
             threadPanelView.heightAnchor.constraint(equalToConstant: Self.threadPanelHeight)
         ])
@@ -430,26 +441,25 @@ final class PetWindowContentView: NSView {
         threadBadgeButton.translatesAutoresizingMaskIntoConstraints = false
         threadBadgeButton.target = self
         threadBadgeButton.action = #selector(toggleThreadPanel)
-        threadBadgeButton.isBordered = false
+        threadBadgeButton.isBordered = true
+        threadBadgeButton.bezelStyle = .glass
+        threadBadgeButton.controlSize = .small
         threadBadgeButton.focusRingType = .none
-        threadBadgeButton.contentTintColor = .white
-        threadBadgeButton.wantsLayer = true
-        threadBadgeButton.layer?.cornerRadius = Self.badgeSize / 2
-        threadBadgeButton.layer?.borderWidth = 1
-        threadBadgeButton.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
-        threadBadgeButton.layer?.backgroundColor = NSColor(calibratedWhite: 0.10, alpha: 0.92).cgColor
+        threadBadgeButton.contentTintColor = .labelColor
+        threadBadgeButton.imagePosition = .imageOnly
+        threadBadgeButton.setButtonType(.momentaryPushIn)
     }
 
     private func configureThreadPanel() {
         addSubview(threadPanelView)
         threadPanelView.translatesAutoresizingMaskIntoConstraints = false
-        threadPanelView.wantsLayer = true
-        threadPanelView.layer?.cornerRadius = 8
-        threadPanelView.layer?.borderWidth = 1
-        threadPanelView.layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
-        threadPanelView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 0.94).cgColor
+        threadPanelView.style = .regular
+        threadPanelView.cornerRadius = 18
+        threadPanelView.tintColor = NSColor.controlAccentColor.withAlphaComponent(0.08)
+        threadPanelView.contentView = threadPanelContentView
 
-        threadPanelView.addSubview(threadStackView)
+        threadPanelContentView.translatesAutoresizingMaskIntoConstraints = false
+        threadPanelContentView.addSubview(threadStackView)
         threadStackView.translatesAutoresizingMaskIntoConstraints = false
         threadStackView.orientation = .vertical
         threadStackView.alignment = .width
@@ -457,10 +467,15 @@ final class PetWindowContentView: NSView {
         threadStackView.spacing = 8
 
         NSLayoutConstraint.activate([
-            threadStackView.leadingAnchor.constraint(equalTo: threadPanelView.leadingAnchor, constant: 16),
-            threadStackView.trailingAnchor.constraint(equalTo: threadPanelView.trailingAnchor, constant: -16),
-            threadStackView.topAnchor.constraint(equalTo: threadPanelView.topAnchor, constant: 12),
-            threadStackView.bottomAnchor.constraint(lessThanOrEqualTo: threadPanelView.bottomAnchor, constant: -12)
+            threadPanelContentView.leadingAnchor.constraint(equalTo: threadPanelView.leadingAnchor),
+            threadPanelContentView.trailingAnchor.constraint(equalTo: threadPanelView.trailingAnchor),
+            threadPanelContentView.topAnchor.constraint(equalTo: threadPanelView.topAnchor),
+            threadPanelContentView.bottomAnchor.constraint(equalTo: threadPanelView.bottomAnchor),
+
+            threadStackView.leadingAnchor.constraint(equalTo: threadPanelContentView.leadingAnchor, constant: 16),
+            threadStackView.trailingAnchor.constraint(equalTo: threadPanelContentView.trailingAnchor, constant: -16),
+            threadStackView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: 12),
+            threadStackView.bottomAnchor.constraint(lessThanOrEqualTo: threadPanelContentView.bottomAnchor, constant: -12)
         ])
     }
 
@@ -470,17 +485,21 @@ final class PetWindowContentView: NSView {
 
         if isThreadPanelExpanded {
             threadBadgeButton.title = ""
+            threadBadgeButton.attributedTitle = NSAttributedString(string: "")
             threadBadgeButton.image = NSImage(
                 systemSymbolName: "chevron.down",
                 accessibilityDescription: "Hide thread details"
             )
+            threadBadgeButton.imagePosition = .imageOnly
+            threadBadgeButton.imageScaling = .scaleProportionallyDown
         } else {
             threadBadgeButton.image = nil
+            threadBadgeButton.imagePosition = .noImage
             threadBadgeButton.attributedTitle = NSAttributedString(
                 string: "\(count)",
                 attributes: [
-                    .font: NSFont.systemFont(ofSize: 18, weight: .semibold),
-                    .foregroundColor: NSColor.white
+                    .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+                    .foregroundColor: NSColor.labelColor
                 ]
             )
         }
@@ -492,30 +511,52 @@ final class PetWindowContentView: NSView {
             view.removeFromSuperview()
         }
 
-        let threads = Array((threadSnapshot?.activeThreads ?? []).prefix(2))
+        let threads = Array((threadSnapshot?.activeThreads ?? []).prefix(1))
         for thread in threads {
             threadStackView.addArrangedSubview(makeThreadRow(for: thread))
         }
     }
 
     private func makeThreadRow(for thread: PetThreadSnapshot) -> NSView {
-        let titleLabel = NSTextField(labelWithString: thread.title)
-        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        titleLabel.textColor = .white
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.maximumNumberOfLines = 1
+        let directoryLabel = NSTextField(labelWithString: thread.directoryName)
+        directoryLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        directoryLabel.textColor = .labelColor
+        directoryLabel.lineBreakMode = .byTruncatingTail
+        directoryLabel.maximumNumberOfLines = 1
+        directoryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        let contextLabel = NSTextField(labelWithString: thread.context)
-        contextLabel.font = .systemFont(ofSize: 16, weight: .regular)
-        contextLabel.textColor = NSColor.white.withAlphaComponent(0.86)
-        contextLabel.lineBreakMode = .byTruncatingTail
-        contextLabel.maximumNumberOfLines = 2
+        let messageLabel = NSTextField(wrappingLabelWithString: thread.messagePreview)
+        messageLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.maximumNumberOfLines = 2
+        messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        let row = NSStackView(views: [titleLabel, contextLabel])
+        let row = NSStackView(views: [directoryLabel, messageLabel])
         row.orientation = .vertical
         row.alignment = .width
-        row.spacing = 2
+        row.spacing = 5
+        row.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        if thread.action != nil {
+            row.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(handleThreadRowClick(_:))))
+        }
+
         return row
+    }
+
+    @objc private func handleThreadRowClick(_ recognizer: NSClickGestureRecognizer) {
+        guard
+            recognizer.state == .ended,
+            let row = recognizer.view,
+            let index = threadStackView.arrangedSubviews.firstIndex(of: row),
+            let thread = threadSnapshot?.activeThreads.prefix(1).dropFirst(index).first,
+            thread.action != nil
+        else {
+            return
+        }
+
+        onThreadClick?(thread)
     }
 
     private func applyThreadPanelVisibility() {

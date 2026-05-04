@@ -84,7 +84,12 @@ enum AppStorage {
 
         do {
             let data = try Data(contentsOf: configurationURL)
-            return try JSONDecoder().decode(AppConfiguration.self, from: data)
+            let configuration = try JSONDecoder().decode(AppConfiguration.self, from: data)
+            let migratedConfiguration = configuration.migratedForCurrentDefaults()
+            if migratedConfiguration != configuration {
+                try? saveConfiguration(migratedConfiguration)
+            }
+            return migratedConfiguration
         } catch {
             do {
                 let backupURL = backupURLForInvalidConfiguration(now: now())

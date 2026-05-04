@@ -19,7 +19,7 @@ gh repo view --json nameWithOwner,url,visibility
 Acceptance:
 
 - `git status --short --branch` shows `main...origin/main` with no `ahead`.
-- The repo remains private at `https://github.com/Retr0123456/global-pet-assistant`.
+- The repository is pushed to the intended remote. Keep it private during internal testing, then switch visibility only after the open-source checklist is complete.
 
 ## Priority 1: Add Source-level Rate Limiting
 
@@ -126,7 +126,7 @@ Concrete first `open_url` target:
 - Open the private GitHub repo in the default browser:
 
 ```text
-https://github.com/Retr0123456/global-pet-assistant
+https://github.com/example/global-pet-assistant
 ```
 
 Concrete second `open_url` target:
@@ -134,7 +134,7 @@ Concrete second `open_url` target:
 - Open GitHub Actions for this repo when a CI-style event fails:
 
 ```text
-https://github.com/Retr0123456/global-pet-assistant/actions
+https://github.com/example/global-pet-assistant/actions
 ```
 
 Concrete first `open_folder` target:
@@ -142,7 +142,7 @@ Concrete first `open_folder` target:
 - Open the current project workspace in Finder:
 
 ```text
-/Users/ryanchen/codespace/global-pet-assistant
+$HOME/codespace/global-pet-assistant
 ```
 
 Concrete second `open_folder` target:
@@ -150,7 +150,7 @@ Concrete second `open_folder` target:
 - Open the app-owned pet folder:
 
 ```text
-/Users/ryanchen/.global-pet-assistant/pets
+$HOME/.global-pet-assistant/pets
 ```
 
 How to do it:
@@ -166,7 +166,7 @@ How to do it:
 - Validate `open_folder`:
   - path must exist
   - path must be a directory
-  - for the first version, allow paths under `/Users/ryanchen/codespace` and `/Users/ryanchen/.global-pet-assistant`
+  - for the first version, allow paths under `$HOME/codespace` and `$HOME/.global-pet-assistant`
 - Wire pet click from `PetWindowContentView` or `PetSpriteView` to `ActionHandler`.
 - Keep drag-to-move working. Treat a click as an action only when mouse movement stays below a small threshold.
 
@@ -178,7 +178,7 @@ swift run petctl notify \
   --level success \
   --title "Open repo" \
   --message "Click the pet to open GitHub" \
-  --action-url "https://github.com/Retr0123456/global-pet-assistant" \
+  --action-url "https://github.com/example/global-pet-assistant" \
   --ttl-ms 60000
 ```
 
@@ -188,7 +188,7 @@ swift run petctl notify \
   --level warning \
   --title "Open project folder" \
   --message "Click the pet to open the workspace" \
-  --action-folder "/Users/ryanchen/codespace/global-pet-assistant" \
+  --action-folder "$HOME/codespace/global-pet-assistant" \
   --ttl-ms 60000
 ```
 
@@ -212,13 +212,13 @@ Concrete first pet import:
 - Import the existing Codex pet:
 
 ```text
-/Users/ryanchen/.codex/pets/emma
+$HOME/.codex/pets/<name>
 ```
 
 - Destination:
 
 ```text
-/Users/ryanchen/.global-pet-assistant/pets/emma
+$HOME/.global-pet-assistant/pets/<name>
 ```
 
 How to do it:
@@ -230,25 +230,25 @@ How to do it:
 - Add `petctl open-folder` to open:
 
 ```text
-/Users/ryanchen/.global-pet-assistant/pets
+$HOME/.global-pet-assistant/pets
 ```
 
-- Add `petctl import-codex-pet emma` or a small `Tools/import-codex-pet.sh emma`.
+- Add `petctl import-codex-pet <name>` or a small `Tools/import-codex-pet.sh <name>`.
 - Copy `pet.json` and `spritesheet.*`; do not symlink for the first version.
 
 Verification:
 
 ```bash
 swift run petctl open-folder
-swift run petctl import-codex-pet emma
-find ~/.global-pet-assistant/pets/emma -maxdepth 1 -type f
+swift run petctl import-codex-pet <name>
+find ~/.global-pet-assistant/pets/<name> -maxdepth 1 -type f
 swift run GlobalPetAssistant
 ```
 
 Acceptance:
 
-- Emma loads from `~/.global-pet-assistant/pets/emma`.
-- If the app-owned pet is removed, the app still falls back to `~/.codex/pets/emma`.
+- The imported pet loads from `~/.global-pet-assistant/pets/<name>`.
+- If the app-owned pet is removed, the app still falls back to a compatible package under `~/.codex/pets`.
 - If both are unavailable, the bundled placeholder still loads.
 
 ## Priority 5: Daily-use macOS Polish

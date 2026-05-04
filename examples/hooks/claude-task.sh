@@ -9,6 +9,7 @@ PET_SOURCE="${PET_SOURCE:-claude-code}"
 PET_DEDUPE_KEY="${PET_DEDUPE_KEY:-claude:global-pet-assistant}"
 PET_MESSAGE="${PET_MESSAGE:-Claude Code is working in global-pet-assistant}"
 PET_TTL_MS="${PET_TTL_MS:-30000}"
+PET_ACTION_FOLDER="${PET_ACTION_FOLDER:-$ROOT_DIR}"
 EVENT="${1:-running}"
 
 run_petctl() {
@@ -30,7 +31,7 @@ case "$EVENT" in
       --title "${PET_TITLE:-Claude Code task complete}" \
       --message "${PET_MESSAGE:-Review the changes in global-pet-assistant}" \
       --dedupe-key "$PET_DEDUPE_KEY" \
-      --action-folder "${PET_ACTION_FOLDER:-/Users/ryanchen/codespace/global-pet-assistant}"
+      --action-folder "$PET_ACTION_FOLDER"
     ;;
   waiting|input)
     run_petctl notify \
@@ -48,7 +49,7 @@ case "$EVENT" in
       --title "${PET_TITLE:-Claude Code task failed}" \
       --message "${PET_MESSAGE:-Open the repo and inspect the failure}" \
       --dedupe-key "$PET_DEDUPE_KEY" \
-      --action-folder "${PET_ACTION_FOLDER:-/Users/ryanchen/codespace/global-pet-assistant}"
+      --action-folder "$PET_ACTION_FOLDER"
     ;;
   *)
     echo "Unknown Claude task event: $EVENT" >&2

@@ -35,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.onPetClick = { [weak self] in
                 self?.handlePetClick()
             }
+            window.onThreadClick = { [weak self] thread in
+                _ = self?.performAction(thread.action, source: thread.source)
+            }
             window.onPetHoverChanged = { [weak self] isInside in
                 self?.petBehaviorController?.handleHoverChanged(isInside: isInside)
             }
@@ -255,9 +258,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return false
         }
 
+        return performAction(action, source: eventRouter.currentSource)
+    }
+
+    @discardableResult
+    private func performAction(_ action: LocalPetAction?, source: String?) -> Bool {
         return actionHandler.perform(
             action,
-            source: eventRouter.currentSource,
+            source: source,
             configuration: appConfiguration
         )
     }

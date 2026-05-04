@@ -1,6 +1,6 @@
 # Codex Hook Integration
 
-This repository includes a repo-local Codex hook configuration that forwards Codex lifecycle events to the local pet event API at `http://127.0.0.1:17321/events`.
+This repository includes opt-in Codex hook examples that forward Codex lifecycle events to the local pet event API at `http://127.0.0.1:17321/events`.
 
 ## Official Codex Surface
 
@@ -13,11 +13,11 @@ codex_hooks = true
 
 Codex loads hooks from `hooks.json` or inline `[hooks]` tables next to active config layers. The useful locations include `~/.codex/hooks.json`, `~/.codex/config.toml`, `<repo>/.codex/hooks.json`, and `<repo>/.codex/config.toml`.
 
-This checkout uses `.codex/config.toml` to enable the feature flag and `.codex/hooks.json` for the hook handlers, so the integration stays repo-local. Codex only loads project-local hooks after the project `.codex/` layer is trusted.
+The public checkout keeps hook templates under `examples/codex-hooks/` instead of shipping an active `.codex/` layer. Codex only loads project-local hooks after you copy the examples into `.codex/` and trust that config layer.
 
 ## Event Mapping
 
-The hook script is `.codex/hooks/codex-pet-event.py`. It reads the Codex hook JSON object from stdin and posts a `LocalPetEvent` JSON payload to the app.
+The hook script is `examples/codex-hooks/hooks/codex-pet-event.py`. It reads the Codex hook JSON object from stdin and posts a `LocalPetEvent` JSON payload to the app.
 
 | Codex hook | Pet event | Pet state | Purpose |
 | --- | --- | --- | --- |
@@ -26,18 +26,33 @@ The hook script is `.codex/hooks/codex-pet-event.py`. It reads the Codex hook JS
 | `PermissionRequest` | `codex.permission.request` | `waiting` via warning level | Codex is waiting for approval of a command or permission request. |
 | `Stop` | `codex.turn.review` | `review` via success level | Codex finished the turn and the result is ready for review. |
 
-The source is `codex-cli:<session-prefix>` and the dedupe key is `codex:<session_id>`, so repeated lifecycle events for the same Codex thread update one active pet thread instead of creating duplicates.
+The source is `codex-cli:<stable-session-key>` and the dedupe key is `codex:<session_id>`, so repeated lifecycle events for the same Codex thread update one active pet thread instead of creating duplicates. The stable session key includes a hash of the full Codex session id instead of a short prefix, which keeps multiple Codex sessions distinct even when their time-sorted ids share the same prefix. The hook sends Codex's current working directory as a separate `cwd` field; the pet UI uses its last path component as the message area's directory label.
+
+When Codex runs inside kitty and the hook inherits `KITTY_WINDOW_ID` plus `KITTY_LISTEN_ON`, the hook also attaches a `focus_kitty_window` action. Clicking the message area asks kitty to focus the matching window id, which also switches to the containing kitty tab. This requires kitty remote control over a socket, for example:
+
+```conf
+allow_remote_control socket-only
+listen_on unix:/tmp/global-pet-kitty.sock
+```
 
 ## Enable The Hooks
 
-This repository already includes `.codex/config.toml`:
+Copy the opt-in examples into a local `.codex/` directory:
+
+```bash
+mkdir -p .codex
+cp examples/codex-hooks/config.toml .codex/config.toml
+cp examples/codex-hooks/hooks.json .codex/hooks.json
+```
+
+The example `config.toml` enables:
 
 ```toml
 [features]
 codex_hooks = true
 ```
 
-Restart Codex and trust this repository's `.codex/` config layer if prompted. If you prefer a user-level configuration instead, add the same feature flag to `~/.codex/config.toml`.
+Restart Codex and trust this repository's `.codex/` config layer if prompted. If you prefer a user-level configuration instead, add the same feature flag to `~/.codex/config.toml` and point your hooks at the absolute path of `examples/codex-hooks/hooks/codex-pet-event.py`.
 
 ## Global Push Disable Switch
 

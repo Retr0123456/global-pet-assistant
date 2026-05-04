@@ -70,13 +70,13 @@ Required tests:
   - retry-after value is positive when denied.
   - old timestamps fall out of the window.
 - `ActionHandler`:
-  - allows `https://github.com/Retr0123456/global-pet-assistant`.
+  - allows `https://github.com/example/global-pet-assistant`.
   - allows `http://127.0.0.1:<port>`.
   - rejects `ftp://...`.
-  - allows `/Users/ryanchen/codespace/global-pet-assistant`.
+  - allows a project folder under the current user's workspace root.
   - rejects a file path when the action type is `open_folder`.
 - `PetPackage`:
-  - accepts Emma's package layout.
+  - accepts a Codex-compatible package layout.
   - rejects `spritesheetPath` path traversal such as `../spritesheet.webp`.
 
 Verification:
@@ -106,16 +106,16 @@ Concrete first config:
     "codex-cli": {
       "actions": ["open_url", "open_folder", "open_file", "open_app"],
       "urlHosts": ["github.com"],
-      "folderRoots": ["/Users/ryanchen/codespace", "/Users/ryanchen/.global-pet-assistant"],
+      "folderRoots": ["/Users/example/codespace", "/Users/example/.global-pet-assistant"],
       "appBundleIds": ["com.openai.codex", "com.microsoft.VSCode"]
     },
     "claude-code": {
       "actions": ["open_folder", "open_file"],
-      "folderRoots": ["/Users/ryanchen/codespace", "/Users/ryanchen/.global-pet-assistant"]
+      "folderRoots": ["/Users/example/codespace", "/Users/example/.global-pet-assistant"]
     },
     "local-build": {
       "actions": ["open_folder", "open_file"],
-      "folderRoots": ["/Users/ryanchen/codespace", "/Users/ryanchen/.global-pet-assistant/logs"]
+      "folderRoots": ["/Users/example/codespace", "/Users/example/.global-pet-assistant/logs"]
     },
     "ci": {
       "actions": ["open_url"],
@@ -140,13 +140,13 @@ swift run petctl notify \
   --source unknown-tool \
   --level success \
   --title "Should reject action" \
-  --action-url "https://github.com/Retr0123456/global-pet-assistant"
+  --action-url "https://github.com/example/global-pet-assistant"
 
 swift run petctl notify \
   --source codex-cli \
   --level success \
   --title "Should allow action" \
-  --action-url "https://github.com/Retr0123456/global-pet-assistant"
+  --action-url "https://github.com/example/global-pet-assistant"
 ```
 
 Acceptance:
@@ -166,7 +166,7 @@ What to do:
 Concrete `open_file` target:
 
 ```text
-/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log
+$HOME/.global-pet-assistant/logs/local-build-latest.log
 ```
 
 How to make that file useful:
@@ -210,7 +210,7 @@ swift run petctl notify \
   --level danger \
   --title "Build failed" \
   --message "Click to open the build log" \
-  --action-file "/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log"
+  --action-file "$HOME/.global-pet-assistant/logs/local-build-latest.log"
 
 swift run petctl notify \
   --source codex-cli \

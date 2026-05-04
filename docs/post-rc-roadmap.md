@@ -156,9 +156,9 @@ What to do:
 Commands to add:
 
 ```bash
-petctl install-hook local-build --repo /Users/ryanchen/codespace/global-pet-assistant
-petctl install-hook codex --repo /Users/ryanchen/codespace/global-pet-assistant
-petctl install-hook claude --repo /Users/ryanchen/codespace/global-pet-assistant
+petctl install-hook local-build --repo $HOME/codespace/global-pet-assistant
+petctl install-hook codex --repo $HOME/codespace/global-pet-assistant
+petctl install-hook claude --repo $HOME/codespace/global-pet-assistant
 ```
 
 Concrete first install output:
@@ -203,8 +203,8 @@ Supported first payload:
 
 Mapping:
 
-- workflow failure -> source `ci`, level `danger`, action URL `https://github.com/Retr0123456/global-pet-assistant/actions`
-- workflow success -> source `ci`, level `success`, action URL `https://github.com/Retr0123456/global-pet-assistant/actions`
+- workflow failure -> source `ci`, level `danger`, action URL `https://github.com/example/global-pet-assistant/actions`
+- workflow success -> source `ci`, level `success`, action URL `https://github.com/example/global-pet-assistant/actions`
 
 Acceptance:
 
@@ -224,7 +224,9 @@ Options:
 - Public/private distribution: Developer ID signing and notarization.
 - Developer install convenience: Homebrew tap or `install.sh`.
 
-Concrete next local-only target:
+Status: implemented in `Tools/package-release-app.sh`.
+
+Concrete local-only target:
 
 ```text
 .build/release/GlobalPetAssistant.zip

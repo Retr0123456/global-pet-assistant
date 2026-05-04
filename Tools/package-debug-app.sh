@@ -4,12 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-swift build
+SWIFT_BUILD_FLAGS="${SWIFT_BUILD_FLAGS:-}"
 
-BIN_DIR="$(swift build --show-bin-path)"
+swift build ${SWIFT_BUILD_FLAGS}
+
+BIN_DIR="$(swift build ${SWIFT_BUILD_FLAGS} --show-bin-path)"
 APP_PATH="$ROOT_DIR/.build/GlobalPetAssistant.app"
 EXECUTABLE="$BIN_DIR/GlobalPetAssistant"
 RESOURCE_BUNDLE="$BIN_DIR/GlobalPetAssistant_GlobalPetAssistant.bundle"
+APP_ICON="$ROOT_DIR/Assets/AppIcon/AppIcon.icns"
 
 rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
@@ -21,6 +24,10 @@ if [[ -d "$RESOURCE_BUNDLE" ]]; then
   cp -R "$RESOURCE_BUNDLE" "$APP_PATH/Contents/Resources/GlobalPetAssistant_GlobalPetAssistant.bundle"
 fi
 
+if [[ -f "$APP_ICON" ]]; then
+  cp "$APP_ICON" "$APP_PATH/Contents/Resources/AppIcon.icns"
+fi
+
 cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,7 +36,9 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key>
   <string>GlobalPetAssistant</string>
   <key>CFBundleIdentifier</key>
-  <string>com.ryanchen.GlobalPetAssistant</string>
+  <string>io.github.globalpetassistant.GlobalPetAssistant</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleName</key>
   <string>Global Pet Assistant</string>
   <key>CFBundlePackageType</key>
@@ -39,7 +48,7 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
-  <string>13.0</string>
+  <string>26.0</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSHighResolutionCapable</key>

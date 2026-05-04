@@ -3,8 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+LOG_DIR="$HOME/.global-pet-assistant/logs"
+BUILD_LOG="$LOG_DIR/local-build-latest.log"
+EXAMPLE_REPO_URL="https://github.com/example/global-pet-assistant"
+SWIFT_BUILD_FLAGS="${SWIFT_BUILD_FLAGS:-}"
 
-swift build
+swift build ${SWIFT_BUILD_FLAGS}
 
 swift run GlobalPetAssistant &
 APP_PID=$!
@@ -78,7 +82,7 @@ echo "action validation: allowed GitHub URL is accepted"
 CODEX_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-codex-action.XXXXXX.json")"
 STATUS="$(curl -sS -o "$CODEX_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
-  -d '{"source":"codex-cli","type":"task.completed","level":"success","title":"Open repo","action":{"type":"open_url","url":"https://github.com/Retr0123456/global-pet-assistant"},"ttlMs":1000}' \
+  -d "{\"source\":\"codex-cli\",\"type\":\"task.completed\",\"level\":\"success\",\"title\":\"Open repo\",\"action\":{\"type\":\"open_url\",\"url\":\"$EXAMPLE_REPO_URL\"},\"ttlMs\":1000}" \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "202" ]]; then
   echo "Expected valid GitHub action URL to return HTTP 202, got $STATUS"
@@ -102,7 +106,7 @@ echo "action allowlist: unknown source with action is rejected"
 UNKNOWN_ACTION_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-unknown-action.XXXXXX.json")"
 STATUS="$(curl -sS -o "$UNKNOWN_ACTION_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
-  -d '{"source":"unknown-tool","type":"task.completed","level":"success","title":"Unknown source action","action":{"type":"open_url","url":"https://github.com/Retr0123456/global-pet-assistant"},"ttlMs":1000}' \
+  -d "{\"source\":\"unknown-tool\",\"type\":\"task.completed\",\"level\":\"success\",\"title\":\"Unknown source action\",\"action\":{\"type\":\"open_url\",\"url\":\"$EXAMPLE_REPO_URL\"},\"ttlMs\":1000}" \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "403" ]]; then
   echo "Expected unknown source action to return HTTP 403, got $STATUS"
@@ -116,18 +120,18 @@ swift run petctl notify \
   --source local-build \
   --level warning \
   --title "Open project folder" \
-  --action-folder "/Users/ryanchen/codespace/global-pet-assistant" \
+  --action-folder "$ROOT_DIR" \
   --ttl-ms 1000 \
   --timeout 5 >/dev/null
 
 echo "action validation: petctl accepts an allowed build log file action"
-mkdir -p /Users/ryanchen/.global-pet-assistant/logs
-echo "example build failure" > /Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log
+mkdir -p "$LOG_DIR"
+echo "example build failure" > "$BUILD_LOG"
 swift run petctl notify \
   --source local-build \
   --level danger \
   --title "Open build log" \
-  --action-file "/Users/ryanchen/.global-pet-assistant/logs/local-build-latest.log" \
+  --action-file "$BUILD_LOG" \
   --ttl-ms 1000 \
   --timeout 5 >/dev/null
 
@@ -159,7 +163,7 @@ echo "action validation: non-directory folder action is rejected"
 INVALID_FOLDER_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-folder.XXXXXX.json")"
 STATUS="$(curl -sS -o "$INVALID_FOLDER_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
-  -d '{"source":"local-build","type":"task.completed","level":"success","action":{"type":"open_folder","path":"/Users/ryanchen/codespace/global-pet-assistant/Package.swift"}}' \
+  -d "{\"source\":\"local-build\",\"type\":\"task.completed\",\"level\":\"success\",\"action\":{\"type\":\"open_folder\",\"path\":\"$ROOT_DIR/Package.swift\"}}" \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "400" ]]; then
   echo "Expected invalid action folder to return HTTP 400, got $STATUS"

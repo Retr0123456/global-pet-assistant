@@ -1,0 +1,23 @@
+name: Feature Request
+description: Suggest an improvement or integration.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow should this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security And Privacy Notes
+      description: Mention whether this touches event ingestion, actions, file paths, logs, or external services.
