@@ -37,7 +37,28 @@ listen_on unix:/tmp/global-pet-kitty.sock
 
 ## Enable The Hooks
 
-Copy the opt-in examples into a local `.codex/` directory:
+For daily use across multiple working directories, install the hook at the
+Codex user level:
+
+```bash
+Tools/install-codex-hooks.sh
+```
+
+This copies the hook script to `~/.codex/hooks/global-pet-assistant/`, writes
+`~/.codex/hooks.json` with an absolute hook script path, and ensures
+`~/.codex/config.toml` contains:
+
+```toml
+[features]
+codex_hooks = true
+```
+
+Restart Codex sessions after installing. User-level hooks are the recommended
+setup when you launch Codex from sibling directories such as
+`~/codespace/global-pet-assistant` and `~/codespace`.
+
+For repo-local testing only, copy the opt-in examples into a local `.codex/`
+directory:
 
 ```bash
 mkdir -p .codex
@@ -52,7 +73,8 @@ The example `config.toml` enables:
 codex_hooks = true
 ```
 
-Restart Codex and trust this repository's `.codex/` config layer if prompted. If you prefer a user-level configuration instead, add the same feature flag to `~/.codex/config.toml` and point your hooks at the absolute path of `examples/codex-hooks/hooks/codex-pet-event.py`.
+Restart Codex and trust this repository's `.codex/` config layer if prompted.
+Repo-local hooks only apply when Codex loads that repo's `.codex/` config layer.
 
 ## Global Push Disable Switch
 

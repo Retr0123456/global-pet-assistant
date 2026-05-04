@@ -163,7 +163,16 @@ Each example is a thin wrapper around `petctl`. Copy the relevant script into th
 Codex lifecycle hooks are available as opt-in examples under `examples/codex-hooks/`.
 They are not enabled by default in the public checkout.
 
-To enable them for this repository:
+To enable them for every Codex session on this machine:
+
+```bash
+Tools/install-codex-hooks.sh
+```
+
+This installs a user-level hook under `~/.codex/`, so sessions launched from
+different directories can all notify the same pet app.
+
+To enable them for this repository only:
 
 ```bash
 mkdir -p .codex
