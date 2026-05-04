@@ -69,8 +69,8 @@ final class FloatingPetWindow: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        level = .statusBar
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         isMovableByWindowBackground = false
         hidesOnDeactivate = false
     }
@@ -80,7 +80,12 @@ final class FloatingPetWindow: NSPanel {
     }
 
     func show() {
+        setFrame(Self.constrainedFrame(frame), display: true)
         orderFrontRegardless()
+        AuditLogger.appendRuntime(
+            status: "pet_window_ordered_front",
+            message: "frame=\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.width))x\(Int(frame.height)) level=\(level.rawValue)"
+        )
     }
 
     func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
