@@ -20,6 +20,7 @@ opening a public issue. Include:
 Global Pet Assistant is designed as a local macOS utility:
 
 - the HTTP event server binds to `127.0.0.1`;
+- mutating event writes require `Authorization: Bearer <token>`;
 - incoming request bodies are size-limited;
 - noisy sources are rate-limited;
 - click actions are allowlisted by source;
@@ -35,3 +36,6 @@ Runtime logs live under `~/.global-pet-assistant/logs`. They may include event
 titles, short message previews, source identifiers, working-directory paths, and
 action metadata. Do not attach those logs to public issues without reviewing
 them first.
+
+The local bearer token lives at `~/.global-pet-assistant/token` with `0600`
+permissions. Do not paste that token into issues, logs, or screenshots.

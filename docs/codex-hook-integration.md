@@ -17,7 +17,7 @@ The public checkout keeps hook templates under `examples/codex-hooks/` instead o
 
 ## Event Mapping
 
-The hook script is `examples/codex-hooks/hooks/codex-pet-event.py`. It reads the Codex hook JSON object from stdin and posts a `LocalPetEvent` JSON payload to the app.
+The hook script is `examples/codex-hooks/hooks/codex-pet-event.py`. It reads the Codex hook JSON object from stdin, reads the local bearer token from `~/.global-pet-assistant/token` when present, and posts a `LocalPetEvent` JSON payload to the app.
 
 | Codex hook | Pet event | Pet state | Purpose |
 | --- | --- | --- | --- |
@@ -89,7 +89,7 @@ swift run GlobalPetAssistant
 Tools/verify-event-runtime.sh
 ```
 
-The hook script intentionally ignores local app connection failures so Codex work is never blocked by the pet app being closed.
+The hook script intentionally ignores local app connection and authentication failures so Codex work is never blocked by the pet app being closed or not yet initialized.
 
 ## Audit Logs
 

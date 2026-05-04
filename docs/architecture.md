@@ -190,7 +190,7 @@ The event API should be local and locked down:
 
 - Bind HTTP only to `127.0.0.1`.
 - Prefer Unix socket for CLI integrations.
-- Support a local token for HTTP writes.
+- Require a local token for HTTP writes.
 - Limit request body size.
 - Rate limit high-volume sources.
 - Validate URLs and file paths before opening.

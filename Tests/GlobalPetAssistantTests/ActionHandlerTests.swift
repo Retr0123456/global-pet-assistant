@@ -23,7 +23,7 @@ struct ActionHandlerTests {
         try ActionHandler.validate(
             LocalPetAction(
                 type: "open_url",
-                url: "https://github.com/example/global-pet-assistant"
+                url: "https://github.com/Retr0123456/global-pet-assistant"
             ),
             source: "codex-cli",
             configuration: configuration
@@ -102,7 +102,7 @@ struct ActionHandlerTests {
             try ActionHandler.validate(
                 LocalPetAction(
                     type: "open_url",
-                    url: "https://github.com/example/global-pet-assistant"
+                    url: "https://github.com/Retr0123456/global-pet-assistant"
                 ),
                 source: "unknown-tool",
                 configuration: configuration

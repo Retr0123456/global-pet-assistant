@@ -34,10 +34,14 @@ Acceptance:
 
 ## Priority 1: Add Local Write Authentication
 
+Status: implemented for `POST /events`. The app generates
+`~/.global-pet-assistant/token`, `petctl` reads it automatically, and unauthenticated
+event writes return `401`.
+
 What to do:
 
-- Require a local token for mutating HTTP requests.
-- Keep `GET /healthz` unauthenticated or add a non-sensitive public health mode.
+- Keep the local token requirement covered by tests and runtime verification.
+- Keep `GET /healthz` unauthenticated as a non-sensitive public health mode.
 
 Why:
 
@@ -203,8 +207,8 @@ Supported first payload:
 
 Mapping:
 
-- workflow failure -> source `ci`, level `danger`, action URL `https://github.com/example/global-pet-assistant/actions`
-- workflow success -> source `ci`, level `success`, action URL `https://github.com/example/global-pet-assistant/actions`
+- workflow failure -> source `ci`, level `danger`, action URL `https://github.com/Retr0123456/global-pet-assistant/actions`
+- workflow success -> source `ci`, level `success`, action URL `https://github.com/Retr0123456/global-pet-assistant/actions`
 
 Acceptance:
 

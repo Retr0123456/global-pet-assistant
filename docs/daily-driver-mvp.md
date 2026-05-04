@@ -126,7 +126,7 @@ Concrete first `open_url` target:
 - Open the private GitHub repo in the default browser:
 
 ```text
-https://github.com/example/global-pet-assistant
+https://github.com/Retr0123456/global-pet-assistant
 ```
 
 Concrete second `open_url` target:
@@ -134,7 +134,7 @@ Concrete second `open_url` target:
 - Open GitHub Actions for this repo when a CI-style event fails:
 
 ```text
-https://github.com/example/global-pet-assistant/actions
+https://github.com/Retr0123456/global-pet-assistant/actions
 ```
 
 Concrete first `open_folder` target:
@@ -178,7 +178,7 @@ swift run petctl notify \
   --level success \
   --title "Open repo" \
   --message "Click the pet to open GitHub" \
-  --action-url "https://github.com/example/global-pet-assistant" \
+  --action-url "https://github.com/Retr0123456/global-pet-assistant" \
   --ttl-ms 60000
 ```
 

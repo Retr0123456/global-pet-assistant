@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 LOG_DIR="$HOME/.global-pet-assistant/logs"
 BUILD_LOG="$LOG_DIR/local-build-latest.log"
-EXAMPLE_REPO_URL="https://github.com/example/global-pet-assistant"
+EXAMPLE_REPO_URL="https://github.com/Retr0123456/global-pet-assistant"
 SWIFT_BUILD_FLAGS="${SWIFT_BUILD_FLAGS:-}"
 
 swift build ${SWIFT_BUILD_FLAGS}
@@ -23,13 +23,30 @@ UNKNOWN_ACTION_RESPONSE=""
 UNKNOWN_NOTIFY_RESPONSE=""
 FILE_ACTION_RESPONSE=""
 APP_ACTION_RESPONSE=""
-trap 'kill "$APP_PID" >/dev/null 2>&1 || true; rm -f "$BIG_PAYLOAD" "$BIG_RESPONSE" "$INVALID_STATE_RESPONSE" "$RATE_LIMIT_RESPONSE" "$CODEX_RESPONSE" "$INVALID_URL_RESPONSE" "$INVALID_FOLDER_RESPONSE" "$UNKNOWN_ACTION_RESPONSE" "$UNKNOWN_NOTIFY_RESPONSE" "$FILE_ACTION_RESPONSE" "$APP_ACTION_RESPONSE"' EXIT
+UNAUTH_RESPONSE=""
+trap 'kill "$APP_PID" >/dev/null 2>&1 || true; rm -f "$BIG_PAYLOAD" "$BIG_RESPONSE" "$INVALID_STATE_RESPONSE" "$RATE_LIMIT_RESPONSE" "$CODEX_RESPONSE" "$INVALID_URL_RESPONSE" "$INVALID_FOLDER_RESPONSE" "$UNKNOWN_ACTION_RESPONSE" "$UNKNOWN_NOTIFY_RESPONSE" "$FILE_ACTION_RESPONSE" "$APP_ACTION_RESPONSE" "$UNAUTH_RESPONSE"' EXIT
 
 sleep 2
 
 echo "healthz: app is reachable"
 curl -fsS http://127.0.0.1:17321/healthz
 echo
+
+TOKEN="$(tr -d '\r\n' < "$HOME/.global-pet-assistant/token")"
+AUTH_HEADER="Authorization: Bearer $TOKEN"
+
+echo "auth: unauthenticated event write is rejected"
+UNAUTH_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-unauth.XXXXXX.json")"
+STATUS="$(curl -sS -o "$UNAUTH_RESPONSE" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"manual","type":"task.started","level":"running","ttlMs":1000}' \
+  http://127.0.0.1:17321/events)"
+if [[ "$STATUS" != "401" ]]; then
+  echo "Expected unauthenticated event write to return HTTP 401, got $STATUS"
+  cat "$UNAUTH_RESPONSE"
+  exit 1
+fi
+grep -q '"error":"unauthorized"' "$UNAUTH_RESPONSE"
 
 echo "petctl: invalid state rejected locally"
 INVALID_STATE_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-state.XXXXXX.out")"
@@ -44,6 +61,7 @@ BIG_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-big-response.XXXXXX.json")"
 perl -e 'print "{\"source\":\"manual\",\"type\":\"too.large\",\"message\":\"" . ("x" x 17000) . "\"}"' > "$BIG_PAYLOAD"
 STATUS="$(curl -sS -o "$BIG_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   --data-binary "@$BIG_PAYLOAD" \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "413" ]]; then
@@ -59,6 +77,7 @@ RATE_LIMIT_HIT=0
 for _ in {1..25}; do
   STATUS="$(curl -sS -o "$RATE_LIMIT_RESPONSE" -w '%{http_code}' \
     -H 'Content-Type: application/json' \
+    -H "$AUTH_HEADER" \
     -d '{"source":"spam-test","type":"task.tick","level":"running","ttlMs":1000}' \
     http://127.0.0.1:17321/events)"
   if [[ "$STATUS" == "429" ]]; then
@@ -82,6 +101,7 @@ echo "action validation: allowed GitHub URL is accepted"
 CODEX_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-codex-action.XXXXXX.json")"
 STATUS="$(curl -sS -o "$CODEX_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d "{\"source\":\"codex-cli\",\"type\":\"task.completed\",\"level\":\"success\",\"title\":\"Open repo\",\"action\":{\"type\":\"open_url\",\"url\":\"$EXAMPLE_REPO_URL\"},\"ttlMs\":1000}" \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "202" ]]; then
@@ -94,6 +114,7 @@ echo "action allowlist: unknown source without action is accepted"
 UNKNOWN_NOTIFY_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-unknown-notify.XXXXXX.json")"
 STATUS="$(curl -sS -o "$UNKNOWN_NOTIFY_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d '{"source":"unknown-tool","type":"task.completed","level":"success","title":"Unknown source notification","ttlMs":1000}' \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "202" ]]; then
@@ -106,6 +127,7 @@ echo "action allowlist: unknown source with action is rejected"
 UNKNOWN_ACTION_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-unknown-action.XXXXXX.json")"
 STATUS="$(curl -sS -o "$UNKNOWN_ACTION_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d "{\"source\":\"unknown-tool\",\"type\":\"task.completed\",\"level\":\"success\",\"title\":\"Unknown source action\",\"action\":{\"type\":\"open_url\",\"url\":\"$EXAMPLE_REPO_URL\"},\"ttlMs\":1000}" \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "403" ]]; then
@@ -139,6 +161,7 @@ echo "action validation: allowed app bundle action is accepted"
 APP_ACTION_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-app-action.XXXXXX.json")"
 STATUS="$(curl -sS -o "$APP_ACTION_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d '{"source":"codex-cli","type":"task.completed","level":"success","title":"Open Codex","action":{"type":"open_app","bundleId":"com.openai.codex"},"ttlMs":1000}' \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "202" ]]; then
@@ -151,6 +174,7 @@ echo "action validation: disallowed URL is rejected"
 INVALID_URL_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-url.XXXXXX.json")"
 STATUS="$(curl -sS -o "$INVALID_URL_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d '{"source":"codex-cli","type":"task.completed","level":"success","action":{"type":"open_url","url":"ftp://example.com/file"}}' \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "400" ]]; then
@@ -163,6 +187,7 @@ echo "action validation: non-directory folder action is rejected"
 INVALID_FOLDER_RESPONSE="$(mktemp "${TMPDIR:-/tmp}/gpa-invalid-folder.XXXXXX.json")"
 STATUS="$(curl -sS -o "$INVALID_FOLDER_RESPONSE" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d "{\"source\":\"local-build\",\"type\":\"task.completed\",\"level\":\"success\",\"action\":{\"type\":\"open_folder\",\"path\":\"$ROOT_DIR/Package.swift\"}}" \
   http://127.0.0.1:17321/events)"
 if [[ "$STATUS" != "400" ]]; then
@@ -180,6 +205,7 @@ swift run petctl clear --timeout 5 >/dev/null
 echo "curl: level running -> running row"
 curl -sS \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d '{"source":"manual","type":"task.started","level":"running","title":"Running","message":"Manual running state"}' \
   http://127.0.0.1:17321/events
 echo
@@ -196,6 +222,7 @@ sleep 2
 echo "curl: level danger -> failed row"
 curl -sS \
   -H 'Content-Type: application/json' \
+  -H "$AUTH_HEADER" \
   -d '{"source":"manual","type":"task.failed","level":"danger","title":"Danger","message":"Failed row should play"}' \
   http://127.0.0.1:17321/events
 echo

@@ -13,6 +13,7 @@ final class LocalEventServer {
     )
     private let rateLimiter: SourceRateLimiter
     private let configuration: AppConfiguration
+    private let authorizationToken: String
     private let onEvent: @MainActor (LocalPetEvent) -> PetAnimationState
     private let onHealth: @MainActor () -> EventRouterSnapshot?
     private var socketFileDescriptor: Int32 = -1
@@ -23,6 +24,7 @@ final class LocalEventServer {
         maxBodyBytes: Int = 16 * 1024,
         rateLimiter: SourceRateLimiter = SourceRateLimiter(),
         configuration: AppConfiguration = .defaultConfiguration,
+        authorizationToken: String,
         onHealth: @escaping @MainActor () -> EventRouterSnapshot? = { nil },
         onEvent: @escaping @MainActor (LocalPetEvent) -> PetAnimationState
     ) {
@@ -30,6 +32,7 @@ final class LocalEventServer {
         self.maxBodyBytes = maxBodyBytes
         self.rateLimiter = rateLimiter
         self.configuration = configuration
+        self.authorizationToken = authorizationToken
         self.onHealth = onHealth
         self.onEvent = onEvent
     }
@@ -148,6 +151,21 @@ final class LocalEventServer {
                 return
             }
 
+            guard isAuthorized(request) else {
+                AuditLogger.appendEvent(
+                    status: "rejected_unauthorized",
+                    httpStatus: 401,
+                    error: "missing_or_invalid_bearer_token"
+                )
+                try writeResponse(
+                    to: client,
+                    status: 401,
+                    reason: "Unauthorized",
+                    body: ["ok": false, "error": "unauthorized"]
+                )
+                return
+            }
+
             let event = try JSONDecoder().decode(LocalPetEvent.self, from: request.body)
             AuditLogger.appendEvent(status: "received", event: event)
             if !event.clearsRouter, let rejection = rateLimiter.record(source: event.source) {
@@ -261,6 +279,14 @@ final class LocalEventServer {
         return box.snapshot
     }
 
+    private func isAuthorized(_ request: LocalHTTPRequest) -> Bool {
+        guard let token = LocalAuthToken.bearerToken(from: request.headers["authorization"]) else {
+            return false
+        }
+
+        return LocalAuthToken.constantTimeEquals(token, authorizationToken)
+    }
+
     private func readRequest(from client: Int32) throws -> LocalHTTPRequest {
         var data = Data()
         var buffer = [UInt8](repeating: 0, count: 4096)
@@ -329,6 +355,7 @@ final class LocalEventServer {
         return LocalHTTPRequest(
             method: String(requestParts[0]),
             path: String(requestParts[1]),
+            headers: headers,
             body: body
         )
     }
@@ -361,6 +388,7 @@ extension LocalEventServer: @unchecked Sendable {}
 private struct LocalHTTPRequest {
     let method: String
     let path: String
+    let headers: [String: String]
     let body: Data
 }
 

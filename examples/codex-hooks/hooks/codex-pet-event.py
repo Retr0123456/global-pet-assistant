@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 DEFAULT_ENDPOINT = "http://127.0.0.1:17321/events"
 DISABLE_FILE = Path.home() / ".codex" / "global-pet-assistant-disabled"
 HOOK_LOG_FILE = Path.home() / ".global-pet-assistant" / "logs" / "codex-hook-events.jsonl"
+TOKEN_FILE = Path.home() / ".global-pet-assistant" / "token"
 MAX_CONTEXT_CHARS = 240
 
 
@@ -201,7 +202,7 @@ def send_event(event: Dict[str, Any]) -> int:
     request = urllib.request.Request(
         endpoint,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers=request_headers(),
         method="POST",
     )
 
@@ -223,6 +224,17 @@ def send_event(event: Dict[str, Any]) -> int:
             "error": str(error),
         })
         return 0
+
+
+def request_headers() -> Dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    try:
+        token = TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        token = ""
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def append_hook_log(record: Dict[str, Any]) -> None:

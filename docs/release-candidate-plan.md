@@ -70,7 +70,7 @@ Required tests:
   - retry-after value is positive when denied.
   - old timestamps fall out of the window.
 - `ActionHandler`:
-  - allows `https://github.com/example/global-pet-assistant`.
+  - allows `https://github.com/Retr0123456/global-pet-assistant`.
   - allows `http://127.0.0.1:<port>`.
   - rejects `ftp://...`.
   - allows a project folder under the current user's workspace root.
@@ -140,13 +140,13 @@ swift run petctl notify \
   --source unknown-tool \
   --level success \
   --title "Should reject action" \
-  --action-url "https://github.com/example/global-pet-assistant"
+  --action-url "https://github.com/Retr0123456/global-pet-assistant"
 
 swift run petctl notify \
   --source codex-cli \
   --level success \
   --title "Should allow action" \
-  --action-url "https://github.com/example/global-pet-assistant"
+  --action-url "https://github.com/Retr0123456/global-pet-assistant"
 ```
 
 Acceptance:

@@ -77,8 +77,11 @@ swift run GlobalPetAssistant
 Local event API:
 
 ```bash
+PET_TOKEN="$(tr -d '\r\n' < ~/.global-pet-assistant/token)"
+
 curl -X POST http://127.0.0.1:17321/events \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $PET_TOKEN" \
   -d '{"source":"manual","type":"task.completed","level":"success","title":"Task complete"}'
 
 swift run petctl notify --level success --title "Task complete"
@@ -88,7 +91,7 @@ swift run petctl notify \
   --source codex-cli \
   --level success \
   --title "Open repo" \
-  --action-url "https://github.com/example/global-pet-assistant"
+  --action-url "https://github.com/Retr0123456/global-pet-assistant"
 swift run petctl notify \
   --source local-build \
   --level warning \
@@ -109,6 +112,11 @@ curl -fsS http://127.0.0.1:17321/healthz
 ```
 
 `/healthz` returns the app liveness status plus the router snapshot (`state` and `activeEvents`) so scripts can distinguish a reachable app from an idle or busy pet.
+
+`GET /healthz` does not require authentication. `POST /events` requires a local
+bearer token from `~/.global-pet-assistant/token`. The app creates that token on
+first launch with file permissions set to `0600`, and `petctl` reads it
+automatically.
 
 Source-level rate limits are in memory and reset when the app restarts:
 
@@ -297,6 +305,7 @@ Global Pet Assistant stores local state in `~/.global-pet-assistant`:
 | `window-origin.json` | Saved pet position. |
 | `pets/` | App-owned imported pet packages. |
 | `logs/` | Runtime, event, and hook audit logs. |
+| `token` | Local bearer token required for `POST /events`. |
 
 Launch-at-login is controlled from the menu bar item. Enabling it registers the
 installed app with macOS Login Items; disabling it removes that registration.

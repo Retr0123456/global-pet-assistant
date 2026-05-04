@@ -16,6 +16,9 @@ enum AppStorage {
     static let runtimeLogURL = logsDirectory
         .appendingPathComponent("runtime.jsonl")
 
+    static let tokenURL = rootDirectory
+        .appendingPathComponent("token")
+
     private static let windowOriginURL = rootDirectory
         .appendingPathComponent("window-origin.json")
 
@@ -112,6 +115,29 @@ enum AppStorage {
         try data.write(to: configurationURL, options: [.atomic])
     }
 
+    static func loadOrCreateToken(
+        fileManager: FileManager = .default,
+        tokenGenerator: () -> String = LocalAuthToken.generate
+    ) throws -> String {
+        try ensureLayout()
+
+        if let existingToken = try readToken(from: tokenURL), !existingToken.isEmpty {
+            try? fileManager.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: tokenURL.path
+            )
+            return existingToken
+        }
+
+        let token = tokenGenerator()
+        try Data((token + "\n").utf8).write(to: tokenURL, options: [.atomic])
+        try fileManager.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: tokenURL.path
+        )
+        return token
+    }
+
     private static func saveDefaultConfiguration() {
         do {
             try saveConfiguration(.defaultConfiguration)
@@ -126,6 +152,16 @@ enum AppStorage {
         let timestamp = formatter.string(from: now)
             .replacingOccurrences(of: ":", with: "-")
         return rootDirectory.appendingPathComponent("config.invalid-\(timestamp).json")
+    }
+
+    private static func readToken(from url: URL) throws -> String? {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        let data = try Data(contentsOf: url)
+        return String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

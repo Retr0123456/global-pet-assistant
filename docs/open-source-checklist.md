@@ -13,8 +13,8 @@ Use this checklist before making the repository public.
 - [x] Changelog exists.
 - [x] Generated binaries, app bundles, logs, and iconset intermediates are ignored.
 - [x] Repo-local Codex hooks are opt-in examples, not active by default.
-- [ ] Replace example GitHub URLs with the final public repository URL.
-- [ ] Review screenshots, logs, and docs for private machine paths before the first public release.
+- [x] Replace example GitHub URLs with the final public repository URL.
+- [x] Review screenshots, logs, and docs for private machine paths before the first public release.
 
 ## Build And Test
 
@@ -22,23 +22,23 @@ Use this checklist before making the repository public.
 - [x] `swift test`
 - [x] `Tools/verify-codex-hook-events.sh`
 - [x] `Tools/package-release-app.sh`
-- [ ] Launch packaged app and check `http://127.0.0.1:17321/healthz`
+- [x] Launch packaged app and check `http://127.0.0.1:17321/healthz`
 
 ## Assets
 
 - [x] App icon has a documented source and policy.
 - [x] Generated `AppIcon.iconset` is ignored.
 - [x] App icon generator uses local macOS tools and does not require the Swift toolchain.
-- [ ] Do not commit third-party pet assets unless their redistribution license is documented.
-- [ ] For Codex-compatible pet assets, document that users can import local copies with `petctl import-codex-pet <name>`.
+- [x] Do not commit third-party pet assets unless their redistribution license is documented.
+- [x] For Codex-compatible pet assets, document that users can import local copies with `petctl import-codex-pet <name>`.
 
 ## Security Review
 
 - [x] Local event server binds to `127.0.0.1`.
+- [x] Local token authentication protects `POST /events`.
 - [x] Event bodies are size-limited.
 - [x] No arbitrary shell-command action is supported.
 - [x] Action execution is source allowlisted.
-- [ ] Add local token authentication before supporting broader integrations.
 
 ## Release
 

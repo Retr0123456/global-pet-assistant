@@ -67,7 +67,7 @@ private let allowedStates: Set<String> = [
 
 private let usage = """
 Usage:
-  petctl notify --level success --title "Task complete" [--source codex-cli] [--message "..."] [--action-url https://github.com/example/global-pet-assistant] [--action-file ~/.global-pet-assistant/logs/local-build-latest.log] [--action-app com.openai.codex] [--timeout 5]
+  petctl notify --level success --title "Task complete" [--source codex-cli] [--message "..."] [--action-url https://github.com/Retr0123456/global-pet-assistant] [--action-file ~/.global-pet-assistant/logs/local-build-latest.log] [--action-app com.openai.codex] [--timeout 5]
   petctl state running --message "Working..." [--source codex-cli] [--ttl-ms 15000] [--timeout 5]
   petctl clear [--source codex-cli] [--timeout 5]
   petctl open-folder
@@ -388,6 +388,7 @@ private func send(_ requestEnvelope: PetctlRequest) throws {
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("Bearer \(try loadToken())", forHTTPHeaderField: "Authorization")
     request.httpBody = try JSONEncoder().encode(requestEnvelope.event)
 
     let semaphore = DispatchSemaphore(value: 0)
@@ -443,6 +444,24 @@ private func logsDirectoryURL() -> URL {
     FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".global-pet-assistant", isDirectory: true)
         .appendingPathComponent("logs", isDirectory: true)
+}
+
+private func appTokenURL() -> URL {
+    FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".global-pet-assistant", isDirectory: true)
+        .appendingPathComponent("token")
+}
+
+private func loadToken() throws -> String {
+    let tokenURL = appTokenURL()
+    guard let token = try? String(contentsOf: tokenURL, encoding: .utf8)
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+          !token.isEmpty
+    else {
+        throw PetctlError.requestFailed("Missing local auth token at \(tokenURL.path). Start Global Pet Assistant once to create it.")
+    }
+
+    return token
 }
 
 private func codexPetsDirectoryURL() -> URL {

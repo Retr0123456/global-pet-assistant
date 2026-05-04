@@ -5,6 +5,7 @@ Global Pet Assistant is local-first.
 - The app listens on `127.0.0.1:17321`.
 - It does not send telemetry to a hosted service.
 - It stores app state and logs under `~/.global-pet-assistant`.
+- It stores the local event API bearer token at `~/.global-pet-assistant/token`.
 - It may read pet packages from `~/.global-pet-assistant/pets` and, as a compatibility fallback, `~/.codex/pets`.
 
 Event senders can include titles, message previews, working directories, and

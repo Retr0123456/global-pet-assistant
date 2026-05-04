@@ -16,12 +16,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let launchAtLoginController = LaunchAtLoginController()
     private var eventPreferences = EventPreferences()
     private var appConfiguration = AppConfiguration.defaultConfiguration
+    private var authorizationToken = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             try AppStorage.ensureLayout()
             AuditLogger.appendRuntime(status: "app_launching", message: "GlobalPetAssistant applicationDidFinishLaunching")
             appConfiguration = AppStorage.loadConfiguration()
+            authorizationToken = try AppStorage.loadOrCreateToken()
             eventPreferences = AppStorage.loadEventPreferences()
             let (package, atlas) = try loadDisplayPet()
             NSLog("GlobalPetAssistant loaded pet '\(package.id)' from \(package.directoryURL.path)")
@@ -135,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startEventServer() {
         let server = LocalEventServer(
             configuration: appConfiguration,
+            authorizationToken: authorizationToken,
             onHealth: { [weak self] in
                 self?.eventRouter?.snapshot
             },
