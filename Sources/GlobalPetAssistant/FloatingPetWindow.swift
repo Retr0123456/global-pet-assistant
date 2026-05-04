@@ -22,7 +22,7 @@ final class FloatingPetWindow: NSPanel {
     }
 
     init(contentView petView: PetSpriteView, savedOrigin: StoredWindowOrigin?) {
-        let size = NSSize(width: PetAtlas.cellWidth, height: PetAtlas.cellHeight)
+        let size = petView.intrinsicContentSize
         let frame = FloatingPetWindow.initialFrame(size: size, savedOrigin: savedOrigin)
         let contentView = PetWindowContentView(wrapping: petView)
         self.petContentView = contentView

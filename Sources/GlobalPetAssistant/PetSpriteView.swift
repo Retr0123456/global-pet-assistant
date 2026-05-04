@@ -1,6 +1,12 @@
 import AppKit
 
 final class PetSpriteView: NSView {
+    static let displayScale: CGFloat = 0.25
+    static let displaySize = NSSize(
+        width: CGFloat(PetAtlas.cellWidth) * displayScale,
+        height: CGFloat(PetAtlas.cellHeight) * displayScale
+    )
+
     private let atlas: PetAtlas
     private let spriteLayer = CALayer()
     private var timer: Timer?
@@ -12,8 +18,8 @@ final class PetSpriteView: NSView {
         super.init(frame: NSRect(
             x: 0,
             y: 0,
-            width: PetAtlas.cellWidth,
-            height: PetAtlas.cellHeight
+            width: Self.displaySize.width,
+            height: Self.displaySize.height
         ))
 
         wantsLayer = true
@@ -30,7 +36,7 @@ final class PetSpriteView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: PetAtlas.cellWidth, height: PetAtlas.cellHeight)
+        Self.displaySize
     }
 
     override func layout() {
