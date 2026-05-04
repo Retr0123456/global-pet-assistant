@@ -588,6 +588,7 @@ private final class ThreadMessageRowView: NSView {
     private let onDismiss: (PetThreadSnapshot) -> Void
     private let glassView = NSGlassEffectView()
     private let contentView = NSView()
+    private let textView: ThreadMessageTextView
     private let closeButton = NSButton()
     private var hoverTrackingArea: NSTrackingArea?
 
@@ -599,6 +600,7 @@ private final class ThreadMessageRowView: NSView {
         self.thread = thread
         self.onOpen = onOpen
         self.onDismiss = onDismiss
+        self.textView = ThreadMessageTextView(thread: thread)
         super.init(frame: .zero)
         setupView()
     }
@@ -669,35 +671,8 @@ private final class ThreadMessageRowView: NSView {
         contentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
         contentView.layer?.masksToBounds = true
 
-        let directoryLabel = NSTextField(labelWithString: thread.directoryName)
-        directoryLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        directoryLabel.textColor = .white
-        directoryLabel.alignment = .right
-        directoryLabel.lineBreakMode = .byTruncatingTail
-        directoryLabel.maximumNumberOfLines = 1
-        directoryLabel.allowsExpansionToolTips = false
-        directoryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let messageLabel = NSTextField(wrappingLabelWithString: thread.messagePreview)
-        messageLabel.font = .systemFont(ofSize: 13, weight: .regular)
-        messageLabel.textColor = NSColor.white.withAlphaComponent(0.82)
-        messageLabel.alignment = .right
-        messageLabel.lineBreakMode = .byTruncatingTail
-        messageLabel.maximumNumberOfLines = 2
-        messageLabel.allowsExpansionToolTips = false
-        messageLabel.cell?.truncatesLastVisibleLine = true
-        messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-
-        let labelStackView = NSStackView(views: [directoryLabel, messageLabel])
-        labelStackView.translatesAutoresizingMaskIntoConstraints = false
-        labelStackView.orientation = .vertical
-        labelStackView.alignment = .width
-        labelStackView.distribution = .fill
-        labelStackView.spacing = 3
-        labelStackView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        labelStackView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        contentView.addSubview(labelStackView)
+        contentView.addSubview(textView)
+        textView.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(closeButton)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
@@ -730,16 +705,91 @@ private final class ThreadMessageRowView: NSView {
             closeButton.widthAnchor.constraint(equalToConstant: Self.closeButtonSize),
             closeButton.heightAnchor.constraint(equalToConstant: Self.closeButtonSize),
 
-            labelStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            labelStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
-            labelStackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            labelStackView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 12),
-            labelStackView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12)
+            textView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            textView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            textView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
     }
 
     @objc private func dismissNotification() {
         onDismiss(thread)
+    }
+}
+
+private final class ThreadMessageTextView: NSView {
+    private let directoryName: String
+    private let messagePreview: String
+
+    init(thread: PetThreadSnapshot) {
+        self.directoryName = thread.directoryName
+        self.messagePreview = thread.messagePreview
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+        toolTip = nil
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let textRect = bounds.insetBy(dx: 16, dy: 12)
+        let titleRect = NSRect(
+            x: textRect.minX,
+            y: textRect.minY,
+            width: textRect.width,
+            height: 20
+        )
+        let messageRect = NSRect(
+            x: textRect.minX,
+            y: titleRect.maxY + 4,
+            width: textRect.width,
+            height: 34
+        )
+
+        directoryName.draw(
+            in: titleRect,
+            withAttributes: Self.titleAttributes
+        )
+        messagePreview.draw(
+            with: messageRect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: Self.messageAttributes
+        )
+    }
+
+    private static var titleAttributes: [NSAttributedString.Key: Any] {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .right
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+        return [
+            .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: paragraphStyle
+        ]
+    }
+
+    private static var messageAttributes: [NSAttributedString.Key: Any] {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .right
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        return [
+            .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.82),
+            .paragraphStyle: paragraphStyle
+        ]
     }
 }
 
