@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 final class EventRouter {
     typealias StateHandler = @MainActor (PetAnimationState) -> Void
+    typealias SnapshotHandler = @MainActor (EventRouterSnapshot) -> Void
 
     private struct RoutedEvent {
         let event: LocalPetEvent
@@ -21,10 +22,16 @@ final class EventRouter {
     private(set) var currentState: PetAnimationState = .idle
     private(set) var currentAction: LocalPetAction?
     private(set) var currentSource: String?
+    private let onSnapshotChange: SnapshotHandler?
 
-    init(now: @escaping () -> Date = Date.init, onStateChange: @escaping StateHandler) {
+    init(
+        now: @escaping () -> Date = Date.init,
+        onStateChange: @escaping StateHandler,
+        onSnapshotChange: SnapshotHandler? = nil
+    ) {
         self.now = now
         self.onStateChange = onStateChange
+        self.onSnapshotChange = onSnapshotChange
     }
 
     @discardableResult
@@ -64,6 +71,7 @@ final class EventRouter {
 
         updateCurrentState()
         scheduleExpirationTimer()
+        notifySnapshotChange()
         return currentState
     }
 
@@ -76,6 +84,7 @@ final class EventRouter {
         currentAction = nil
         currentSource = nil
         updateCurrentState()
+        notifySnapshotChange()
         return currentState
     }
 
@@ -84,16 +93,38 @@ final class EventRouter {
         removeEvent(forSource: source)
         updateCurrentState()
         scheduleExpirationTimer()
+        notifySnapshotChange()
         return currentState
     }
 
     var snapshot: EventRouterSnapshot {
         pruneExpired()
+        return makeSnapshot()
+    }
+
+    private func makeSnapshot() -> EventRouterSnapshot {
+        let activeThreads = eventsBySource.values
+            .sorted { lhs, rhs in
+                if lhs.priority == rhs.priority {
+                    return lhs.sequence > rhs.sequence
+                }
+                return lhs.priority > rhs.priority
+            }
+            .map { routedEvent in
+                PetThreadSnapshot(
+                    source: routedEvent.event.source,
+                    title: routedEvent.event.threadTitle,
+                    context: routedEvent.event.threadContext,
+                    state: routedEvent.state
+                )
+            }
+
         return EventRouterSnapshot(
             currentState: currentState,
             activeEventCount: eventsBySource.count,
             currentSource: currentSource,
-            hasAction: currentAction != nil
+            hasAction: currentAction != nil,
+            activeThreads: activeThreads
         )
     }
 
@@ -126,6 +157,7 @@ final class EventRouter {
         }
         updateCurrentState()
         scheduleExpirationTimer()
+        notifySnapshotChange()
     }
 
     private func updateCurrentState() {
@@ -201,6 +233,17 @@ final class EventRouter {
             0
         }
     }
+
+    private func notifySnapshotChange() {
+        onSnapshotChange?(makeSnapshot())
+    }
+}
+
+struct PetThreadSnapshot: Equatable {
+    let source: String
+    let title: String
+    let context: String
+    let state: PetAnimationState
 }
 
 struct EventRouterSnapshot {
@@ -208,4 +251,5 @@ struct EventRouterSnapshot {
     let activeEventCount: Int
     let currentSource: String?
     let hasAction: Bool
+    let activeThreads: [PetThreadSnapshot]
 }

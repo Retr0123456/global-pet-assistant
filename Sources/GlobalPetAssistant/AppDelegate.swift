@@ -108,10 +108,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func installEventRouter() {
-        eventRouter = EventRouter { [weak self] state in
-            self?.petWindow?.show()
-            self?.petBehaviorController?.setBaseState(state)
-        }
+        eventRouter = EventRouter(
+            onStateChange: { [weak self] state in
+                self?.petWindow?.show()
+                self?.petBehaviorController?.setBaseState(state)
+            },
+            onSnapshotChange: { [weak self] snapshot in
+                self?.petWindow?.updateThreadSnapshot(snapshot)
+            }
+        )
+        petWindow?.updateThreadSnapshot(eventRouter?.snapshot)
     }
 
     private func startEventServer() {

@@ -63,6 +63,9 @@ final class FloatingPetWindow: NSPanel {
         )
 
         self.contentView = contentView
+        contentView.onDesiredSizeChanged = { [weak self] in
+            self?.fitToContentPreservingTopRight()
+        }
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
@@ -78,6 +81,25 @@ final class FloatingPetWindow: NSPanel {
 
     func show() {
         orderFrontRegardless()
+    }
+
+    func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
+        petContentView.updateThreadSnapshot(snapshot)
+    }
+
+    private func fitToContentPreservingTopRight() {
+        let desiredSize = petContentView.desiredContentSize
+        guard frame.size != desiredSize else {
+            return
+        }
+
+        let nextFrame = NSRect(
+            x: frame.maxX - desiredSize.width,
+            y: frame.maxY - desiredSize.height,
+            width: desiredSize.width,
+            height: desiredSize.height
+        )
+        setFrame(Self.constrainedFrame(nextFrame), display: true)
     }
 
     func moveToNextScreen() {
@@ -177,30 +199,72 @@ final class FloatingPetWindow: NSPanel {
 }
 
 final class PetWindowContentView: NSView {
+    private static let threadPanelWidth: CGFloat = 528
+    private static let threadPanelHeight: CGFloat = 106
+    private static let threadPanelGap: CGFloat = 8
+    private static let badgeSize: CGFloat = 44
+
     var onClick: (() -> Void)?
     var onHoverChanged: ((Bool) -> Void)?
     var onDragChanged: ((PetDragDirection?) -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
+    var onDesiredSizeChanged: (() -> Void)?
 
+    var desiredContentSize: NSSize {
+        guard isThreadPanelExpanded else {
+            return petView.intrinsicContentSize
+        }
+
+        return NSSize(
+            width: max(petView.intrinsicContentSize.width, Self.threadPanelWidth),
+            height: petView.intrinsicContentSize.height + Self.threadPanelGap + Self.threadPanelHeight
+        )
+    }
+
+    private let petView: PetSpriteView
+    private let threadBadgeButton = NSButton()
+    private let threadPanelView = NSView()
+    private let threadStackView = NSStackView()
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
+    private var didMouseDownOnPet = false
     private var didDrag = false
     private let clickMovementThreshold: CGFloat = 5
     private var hoverTrackingArea: NSTrackingArea?
+    private var threadSnapshot: EventRouterSnapshot?
+    private var isThreadPanelExpanded = false
 
     init(wrapping petView: PetSpriteView) {
+        self.petView = petView
         super.init(frame: NSRect(origin: .zero, size: petView.intrinsicContentSize))
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
+
         addSubview(petView)
         petView.translatesAutoresizingMaskIntoConstraints = false
+
+        configureThreadBadgeButton()
+        configureThreadPanel()
+
         NSLayoutConstraint.activate([
-            petView.leadingAnchor.constraint(equalTo: leadingAnchor),
             petView.trailingAnchor.constraint(equalTo: trailingAnchor),
             petView.topAnchor.constraint(equalTo: topAnchor),
-            petView.bottomAnchor.constraint(equalTo: bottomAnchor)
+            petView.widthAnchor.constraint(equalToConstant: petView.intrinsicContentSize.width),
+            petView.heightAnchor.constraint(equalToConstant: petView.intrinsicContentSize.height),
+
+            threadBadgeButton.topAnchor.constraint(equalTo: petView.topAnchor),
+            threadBadgeButton.trailingAnchor.constraint(equalTo: petView.trailingAnchor),
+            threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.badgeSize),
+            threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.badgeSize),
+
+            threadPanelView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            threadPanelView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            threadPanelView.topAnchor.constraint(equalTo: petView.bottomAnchor, constant: Self.threadPanelGap),
+            threadPanelView.heightAnchor.constraint(equalToConstant: Self.threadPanelHeight)
         ])
+
+        updateThreadSnapshot(nil)
     }
 
     required init?(coder: NSCoder) {
@@ -237,12 +301,18 @@ final class PetWindowContentView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        let localPoint = convert(event.locationInWindow, from: nil)
+        didMouseDownOnPet = petView.frame.contains(localPoint)
         mouseDownScreenPoint = window?.convertPoint(toScreen: event.locationInWindow)
         mouseDownWindowOrigin = window?.frame.origin
         didDrag = false
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard didMouseDownOnPet else {
+            return
+        }
+
         guard
             let window,
             let mouseDownScreenPoint,
@@ -282,9 +352,9 @@ final class PetWindowContentView: NSView {
 
         let mouseUpScreenPoint = window.convertPoint(toScreen: event.locationInWindow)
         let movedDistance = mouseDownScreenPoint?.distance(to: mouseUpScreenPoint) ?? 0
-        if !didDrag && movedDistance <= clickMovementThreshold {
+        if didMouseDownOnPet && !didDrag && movedDistance <= clickMovementThreshold {
             onClick?()
-        } else {
+        } else if didMouseDownOnPet {
             let settledFrame = FloatingPetWindow.settledFrame(window.frame)
             window.setFrame(settledFrame, display: true)
             onDragChanged?(nil)
@@ -310,7 +380,141 @@ final class PetWindowContentView: NSView {
     private func resetMouseTracking() {
         mouseDownScreenPoint = nil
         mouseDownWindowOrigin = nil
+        didMouseDownOnPet = false
         didDrag = false
+    }
+
+    func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
+        let previousSize = desiredContentSize
+        threadSnapshot = snapshot
+
+        if snapshot?.activeEventCount ?? 0 == 0 {
+            isThreadPanelExpanded = false
+        }
+
+        updateThreadBadge()
+        rebuildThreadPanel()
+        applyThreadPanelVisibility()
+
+        let nextSize = desiredContentSize
+        if previousSize != nextSize {
+            frame.size = nextSize
+            onDesiredSizeChanged?()
+        }
+    }
+
+    @objc private func toggleThreadPanel() {
+        guard threadSnapshot?.activeEventCount ?? 0 > 0 else {
+            return
+        }
+
+        let previousSize = desiredContentSize
+        isThreadPanelExpanded.toggle()
+        updateThreadBadge()
+        applyThreadPanelVisibility()
+
+        let nextSize = desiredContentSize
+        if previousSize != nextSize {
+            frame.size = nextSize
+            onDesiredSizeChanged?()
+        }
+    }
+
+    private func configureThreadBadgeButton() {
+        addSubview(threadBadgeButton)
+        threadBadgeButton.translatesAutoresizingMaskIntoConstraints = false
+        threadBadgeButton.target = self
+        threadBadgeButton.action = #selector(toggleThreadPanel)
+        threadBadgeButton.isBordered = false
+        threadBadgeButton.focusRingType = .none
+        threadBadgeButton.contentTintColor = .white
+        threadBadgeButton.wantsLayer = true
+        threadBadgeButton.layer?.cornerRadius = Self.badgeSize / 2
+        threadBadgeButton.layer?.borderWidth = 1
+        threadBadgeButton.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        threadBadgeButton.layer?.backgroundColor = NSColor(calibratedWhite: 0.10, alpha: 0.92).cgColor
+    }
+
+    private func configureThreadPanel() {
+        addSubview(threadPanelView)
+        threadPanelView.translatesAutoresizingMaskIntoConstraints = false
+        threadPanelView.wantsLayer = true
+        threadPanelView.layer?.cornerRadius = 8
+        threadPanelView.layer?.borderWidth = 1
+        threadPanelView.layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
+        threadPanelView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 0.94).cgColor
+
+        threadPanelView.addSubview(threadStackView)
+        threadStackView.translatesAutoresizingMaskIntoConstraints = false
+        threadStackView.orientation = .vertical
+        threadStackView.alignment = .width
+        threadStackView.distribution = .fill
+        threadStackView.spacing = 8
+
+        NSLayoutConstraint.activate([
+            threadStackView.leadingAnchor.constraint(equalTo: threadPanelView.leadingAnchor, constant: 16),
+            threadStackView.trailingAnchor.constraint(equalTo: threadPanelView.trailingAnchor, constant: -16),
+            threadStackView.topAnchor.constraint(equalTo: threadPanelView.topAnchor, constant: 12),
+            threadStackView.bottomAnchor.constraint(lessThanOrEqualTo: threadPanelView.bottomAnchor, constant: -12)
+        ])
+    }
+
+    private func updateThreadBadge() {
+        let count = threadSnapshot?.activeEventCount ?? 0
+        threadBadgeButton.isHidden = count == 0
+
+        if isThreadPanelExpanded {
+            threadBadgeButton.title = ""
+            threadBadgeButton.image = NSImage(
+                systemSymbolName: "chevron.down",
+                accessibilityDescription: "Hide thread details"
+            )
+        } else {
+            threadBadgeButton.image = nil
+            threadBadgeButton.attributedTitle = NSAttributedString(
+                string: "\(count)",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 18, weight: .semibold),
+                    .foregroundColor: NSColor.white
+                ]
+            )
+        }
+    }
+
+    private func rebuildThreadPanel() {
+        threadStackView.arrangedSubviews.forEach { view in
+            threadStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        let threads = Array((threadSnapshot?.activeThreads ?? []).prefix(2))
+        for thread in threads {
+            threadStackView.addArrangedSubview(makeThreadRow(for: thread))
+        }
+    }
+
+    private func makeThreadRow(for thread: PetThreadSnapshot) -> NSView {
+        let titleLabel = NSTextField(labelWithString: thread.title)
+        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        titleLabel.textColor = .white
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.maximumNumberOfLines = 1
+
+        let contextLabel = NSTextField(labelWithString: thread.context)
+        contextLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        contextLabel.textColor = NSColor.white.withAlphaComponent(0.86)
+        contextLabel.lineBreakMode = .byTruncatingTail
+        contextLabel.maximumNumberOfLines = 2
+
+        let row = NSStackView(views: [titleLabel, contextLabel])
+        row.orientation = .vertical
+        row.alignment = .width
+        row.spacing = 2
+        return row
+    }
+
+    private func applyThreadPanelVisibility() {
+        threadPanelView.isHidden = !isThreadPanelExpanded || (threadSnapshot?.activeEventCount ?? 0) == 0
     }
 }
 

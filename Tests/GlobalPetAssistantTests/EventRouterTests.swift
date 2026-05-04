@@ -36,6 +36,7 @@ struct EventRouterTests {
         let snapshot = router.snapshot
         #expect(snapshot.activeEventCount == 1)
         #expect(snapshot.currentSource == "codex-cli")
+        #expect(snapshot.activeThreads.first?.title == "codex-cli")
         #expect(router.currentState == PetAnimationState.waiting)
     }
 
@@ -50,6 +51,25 @@ struct EventRouterTests {
         #expect(snapshot.activeEventCount == 1)
         #expect(snapshot.currentSource == "source-b")
         #expect(router.currentState == PetAnimationState.running)
+    }
+
+    @Test
+    func testSnapshotIncludesThreadTitleAndContext() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(
+            source: "codex-cli",
+            type: "task.started",
+            level: .running,
+            title: "Design personal knowledge base architecture",
+            message: "Submitted 62cea60 and created the GitHub Actions deploy task.",
+            ttlMs: 10_000
+        ))
+
+        let thread = router.snapshot.activeThreads.first
+        #expect(thread?.title == "Design personal knowledge base architecture")
+        #expect(thread?.context == "Submitted 62cea60 and created the GitHub Actions deploy task.")
+        #expect(thread?.state == .running)
     }
 
     @Test

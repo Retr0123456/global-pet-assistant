@@ -109,4 +109,28 @@ struct LocalPetEvent: Codable, Equatable {
         let trimmed = dedupeKey.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    var threadTitle: String {
+        let candidates = [
+            title,
+            type,
+            source
+        ]
+
+        return candidates
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? "Untitled thread"
+    }
+
+    var threadContext: String {
+        let candidates = [
+            message,
+            level?.rawValue,
+            state?.rawValue
+        ]
+
+        return candidates
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? source
+    }
 }
