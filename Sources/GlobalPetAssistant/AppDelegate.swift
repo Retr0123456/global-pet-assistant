@@ -10,7 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var muteCurrentSourceItem: NSMenuItem?
     private var unmuteAllSourcesItem: NSMenuItem?
     private var launchAtLoginItem: NSMenuItem?
+    private var focusTimerMenuItem: NSMenuItem?
     private var eventRouter: EventRouter?
+    private var focusTimerController: FocusTimerController?
     private var eventServer: LocalEventServer?
     private let actionHandler = ActionHandler()
     private let launchAtLoginController = LaunchAtLoginController()
@@ -43,6 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.onThreadDismiss = { [weak self] thread in
                 self?.eventRouter?.clearSource(thread.source)
             }
+            window.onFocusTimerCancel = { [weak self] in
+                self?.cancelFocusTimer()
+            }
             window.onPetHoverChanged = { [weak self] isInside in
                 self?.petBehaviorController?.handleHoverChanged(isInside: isInside)
             }
@@ -62,9 +67,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.petWindow = window
             self.spriteView = spriteView
             self.petBehaviorController = behaviorController
+            let focusTimerController = FocusTimerController(
+                onSnapshotChange: { [weak self] snapshot in
+                    self?.petWindow?.updateFocusTimerSnapshot(snapshot)
+                    self?.rebuildFocusTimerMenu()
+                },
+                onCompleted: { [weak self] _ in
+                    self?.petWindow?.show()
+                    self?.petBehaviorController?.previewState(.waving, duration: 1.5)
+                    AuditLogger.appendRuntime(status: "focus_timer_completed", message: "Focus timer completed")
+                }
+            )
+            self.focusTimerController = focusTimerController
             installStatusMenu()
             installEventRouter()
             startEventServer()
+            window.updateFocusTimerSnapshot(focusTimerController.snapshot)
             window.show()
             AuditLogger.appendRuntime(status: "pet_window_shown", message: "Initial pet window shown")
         } catch {
@@ -114,6 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.launchAtLoginItem = launchAtLoginItem
 
         menu.addItem(NSMenuItem(title: "Move to Next Display", action: #selector(moveToNextDisplay), keyEquivalent: ""))
+        let focusTimerMenuItem = makeFocusTimerMenuItem()
+        menu.addItem(focusTimerMenuItem)
+        self.focusTimerMenuItem = focusTimerMenuItem
         menu.addItem(makePreviewStateMenuItem())
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
@@ -168,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         muteCurrentSourceItem?.title = currentSource.map { "Mute \($0)" } ?? "Mute Current Source"
         muteCurrentSourceItem?.isEnabled = currentSource != nil
         unmuteAllSourcesItem?.isEnabled = !eventPreferences.mutedSources.isEmpty
+        rebuildFocusTimerMenu()
     }
 
     @objc private func showPet() {
@@ -199,6 +221,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         petWindow?.show()
         petBehaviorController?.previewState(state)
         AuditLogger.appendRuntime(status: "pet_preview_state", message: state.rawValue)
+    }
+
+    @objc private func showFocusTimerDialog() {
+        let alert = NSAlert()
+        alert.messageText = "Start Focus Timer"
+        alert.informativeText = "Choose any duration."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Start")
+        alert.addButton(withTitle: "Cancel")
+
+        let hoursField = Self.durationField(initialValue: 0)
+        let minutesField = Self.durationField(initialValue: 25)
+        let secondsField = Self.durationField(initialValue: 0)
+        let accessoryView = makeFocusTimerAccessoryView(
+            hoursField: hoursField,
+            minutesField: minutesField,
+            secondsField: secondsField
+        )
+        alert.accessoryView = accessoryView
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return
+        }
+
+        let durationSeconds = max(0, hoursField.integerValue) * 3_600
+            + max(0, minutesField.integerValue) * 60
+            + max(0, secondsField.integerValue)
+        guard durationSeconds > 0 else {
+            showError(title: "Focus Timer could not start", error: FocusTimerInputError.emptyDuration)
+            return
+        }
+
+        startFocusTimer(durationSeconds: durationSeconds)
+    }
+
+    @objc private func startPresetFocusTimer(_ sender: NSMenuItem) {
+        guard let durationSeconds = sender.representedObject as? Int else {
+            return
+        }
+
+        startFocusTimer(durationSeconds: durationSeconds)
+    }
+
+    @objc private func cancelFocusTimer() {
+        if focusTimerController?.cancel() == true {
+            AuditLogger.appendRuntime(status: "focus_timer_cancelled", message: "Focus timer cancelled")
+        }
     }
 
     @objc private func togglePauseEvents() {
@@ -358,6 +427,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(pauseItem)
 
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(makeFocusTimerMenuItem())
+        let cancelTimerItem = NSMenuItem(title: "Cancel Timer", action: #selector(cancelFocusTimer), keyEquivalent: "")
+        cancelTimerItem.isEnabled = focusTimerController?.snapshot != nil
+        menu.addItem(cancelTimerItem)
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(makePreviewStateMenuItem())
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
 
@@ -380,5 +454,96 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         item.submenu = submenu
         return item
+    }
+
+    private func makeFocusTimerMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Focus Timer", action: nil, keyEquivalent: "")
+        item.submenu = makeFocusTimerSubmenu()
+        return item
+    }
+
+    private func rebuildFocusTimerMenu() {
+        focusTimerMenuItem?.submenu = makeFocusTimerSubmenu()
+    }
+
+    private func makeFocusTimerSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+        let snapshot = focusTimerController?.snapshot
+
+        let startItem = NSMenuItem(title: "Start Timer...", action: #selector(showFocusTimerDialog), keyEquivalent: "")
+        startItem.target = self
+        submenu.addItem(startItem)
+
+        for preset in [(5, "5 min"), (25, "25 min"), (45, "45 min")] {
+            let item = NSMenuItem(title: preset.1, action: #selector(startPresetFocusTimer(_:)), keyEquivalent: "")
+            item.representedObject = preset.0 * 60
+            item.target = self
+            submenu.addItem(item)
+        }
+
+        submenu.addItem(NSMenuItem.separator())
+
+        let remainingTitle = snapshot.map { "Remaining \($0.formattedRemaining)" } ?? "Remaining --:--"
+        let remainingItem = NSMenuItem(title: remainingTitle, action: nil, keyEquivalent: "")
+        remainingItem.isEnabled = false
+        submenu.addItem(remainingItem)
+
+        let cancelItem = NSMenuItem(title: "Cancel Timer", action: #selector(cancelFocusTimer), keyEquivalent: "")
+        cancelItem.target = self
+        cancelItem.isEnabled = snapshot != nil
+        submenu.addItem(cancelItem)
+
+        return submenu
+    }
+
+    private func startFocusTimer(durationSeconds: Int) {
+        guard focusTimerController?.start(durationSeconds: durationSeconds) != nil else {
+            return
+        }
+
+        petWindow?.show()
+        AuditLogger.appendRuntime(status: "focus_timer_started", message: "\(durationSeconds)s")
+    }
+
+    private static func durationField(initialValue: Int) -> NSTextField {
+        let field = NSTextField()
+        field.integerValue = initialValue
+        field.alignment = .right
+        field.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        field.formatter = {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .none
+            formatter.minimum = 0
+            formatter.maximum = 99_999
+            formatter.allowsFloats = false
+            return formatter
+        }()
+        field.widthAnchor.constraint(equalToConstant: 54).isActive = true
+        return field
+    }
+
+    private func makeFocusTimerAccessoryView(
+        hoursField: NSTextField,
+        minutesField: NSTextField,
+        secondsField: NSTextField
+    ) -> NSView {
+        let grid = NSGridView(views: [
+            [NSTextField(labelWithString: "Hours"), hoursField],
+            [NSTextField(labelWithString: "Minutes"), minutesField],
+            [NSTextField(labelWithString: "Seconds"), secondsField]
+        ])
+        grid.column(at: 0).xPlacement = .trailing
+        grid.column(at: 1).xPlacement = .leading
+        grid.rowSpacing = 8
+        grid.columnSpacing = 10
+        return grid
+    }
+}
+
+private enum FocusTimerInputError: LocalizedError {
+    case emptyDuration
+
+    var errorDescription: String? {
+        "Duration must be greater than zero."
     }
 }

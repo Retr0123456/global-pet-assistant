@@ -49,6 +49,15 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
+    var onFocusTimerCancel: (() -> Void)? {
+        get {
+            petContentView.onFocusTimerCancel
+        }
+        set {
+            petContentView.onFocusTimerCancel = newValue
+        }
+    }
+
     var contextMenuProvider: (() -> NSMenu?)? {
         get {
             petContentView.contextMenuProvider
@@ -108,6 +117,10 @@ final class FloatingPetWindow: NSPanel {
 
     func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
         petContentView.updateThreadSnapshot(snapshot)
+    }
+
+    func updateFocusTimerSnapshot(_ snapshot: FocusTimerSnapshot?) {
+        petContentView.updateFocusTimerSnapshot(snapshot)
     }
 
     private func fitToContentPreservingTopRight() {
@@ -243,16 +256,17 @@ final class PetWindowContentView: NSView {
     var onDragChanged: ((PetDragDirection?) -> Void)?
     var onThreadClick: ((PetThreadSnapshot) -> Void)?
     var onThreadDismiss: ((PetThreadSnapshot) -> Void)?
+    var onFocusTimerCancel: (() -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
     var onDesiredSizeChanged: (() -> Void)?
     var preservesRightEdgeOnResize: Bool {
-        !hasFlashMessages || isFlashPlacedLeft
+        !hasSideStack || isFlashPlacedLeft
     }
 
     var desiredContentSize: NSSize {
         let petSize = petView.intrinsicContentSize
-        let flashSideWidth = hasFlashMessages ? Self.flashStackWidth + Self.flashPetGap : 0
+        let flashSideWidth = hasSideStack ? Self.flashStackWidth + Self.flashPetGap : 0
         let primaryWidth = petSize.width + flashSideWidth
         let primaryHeight = max(petSize.height, flashStackHeight + Self.flashTopOffset)
 
@@ -285,10 +299,14 @@ final class PetWindowContentView: NSView {
     private let dragAnimationThreshold: CGFloat = 1.5
     private var hoverTrackingArea: NSTrackingArea?
     private var threadSnapshot: EventRouterSnapshot?
+    private var focusTimerSnapshot: FocusTimerSnapshot?
     private var isThreadPanelExpanded = false
     private var isFlashPlacedLeft = true
     private var hasFlashMessages: Bool {
         !(threadSnapshot?.flashMessages.isEmpty ?? true)
+    }
+    private var hasSideStack: Bool {
+        hasFlashMessages || focusTimerSnapshot != nil
     }
 
     init(wrapping petView: PetSpriteView) {
@@ -487,6 +505,20 @@ final class PetWindowContentView: NSView {
         }
     }
 
+    func updateFocusTimerSnapshot(_ snapshot: FocusTimerSnapshot?) {
+        let previousSize = desiredContentSize
+        focusTimerSnapshot = snapshot
+        updateFlashPlacement()
+        rebuildFlashStack()
+        applyFlashVisibilityAndPlacement()
+
+        let nextSize = desiredContentSize
+        if previousSize != nextSize {
+            frame.size = nextSize
+            onDesiredSizeChanged?()
+        }
+    }
+
     @objc private func toggleThreadPanel() {
         guard threadSnapshot?.activeEventCount ?? 0 > 0 else {
             return
@@ -586,6 +618,15 @@ final class PetWindowContentView: NSView {
             view.removeFromSuperview()
         }
 
+        if let focusTimerSnapshot {
+            let row = FocusTimerBadgeView(snapshot: focusTimerSnapshot) { [weak self] in
+                self?.onFocusTimerCancel?()
+            }
+            row.heightAnchor.constraint(equalToConstant: Self.flashRowHeight).isActive = true
+            row.widthAnchor.constraint(equalToConstant: Self.flashStackWidth).isActive = true
+            flashStackView.addArrangedSubview(row)
+        }
+
         let messages = threadSnapshot?.flashMessages ?? []
         for message in messages {
             let row = FlashMessageRowView(message: message)
@@ -596,7 +637,7 @@ final class PetWindowContentView: NSView {
     }
 
     private func applyFlashVisibilityAndPlacement() {
-        let hasMessages = hasFlashMessages
+        let hasMessages = hasSideStack
         flashStackView.isHidden = !hasMessages
 
         petLeadingConstraint?.isActive = false
@@ -686,7 +727,7 @@ final class PetWindowContentView: NSView {
     }
 
     private var flashStackHeight: CGFloat {
-        let count = threadSnapshot?.flashMessages.count ?? 0
+        let count = (threadSnapshot?.flashMessages.count ?? 0) + (focusTimerSnapshot == nil ? 0 : 1)
         guard count > 0 else {
             return 0
         }
@@ -697,6 +738,111 @@ final class PetWindowContentView: NSView {
 
     private func updateThreadPanelHeight() {
         threadPanelHeightConstraint?.constant = currentThreadPanelHeight
+    }
+}
+
+private final class FocusTimerBadgeView: NSView {
+    private static let cornerRadius: CGFloat = 8
+    private static let iconSize: CGFloat = 14
+    private static let cancelButtonSize: CGFloat = 18
+
+    private let snapshot: FocusTimerSnapshot
+    private let onCancel: () -> Void
+    private let contentView = NSView()
+    private let iconView = NSImageView()
+    private let textField = NSTextField(labelWithString: "")
+    private let cancelButton = NSButton()
+
+    init(snapshot: FocusTimerSnapshot, onCancel: @escaping () -> Void) {
+        self.snapshot = snapshot
+        self.onCancel = onCancel
+        super.init(frame: .zero)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    private func setupView() {
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+
+        addSubview(contentView)
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.76).cgColor
+        contentView.layer?.cornerRadius = Self.cornerRadius
+        contentView.layer?.borderWidth = 1
+        contentView.layer?.borderColor = accentColor.withAlphaComponent(0.36).cgColor
+        contentView.layer?.masksToBounds = true
+
+        contentView.addSubview(iconView)
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.image = NSImage(
+            systemSymbolName: "timer",
+            accessibilityDescription: "Focus timer"
+        )
+        iconView.contentTintColor = accentColor
+        iconView.imageScaling = .scaleProportionallyDown
+
+        contentView.addSubview(textField)
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.stringValue = snapshot.formattedRemaining
+        textField.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        textField.textColor = NSColor.white.withAlphaComponent(0.9)
+        textField.lineBreakMode = .byClipping
+        textField.maximumNumberOfLines = 1
+        textField.alignment = .left
+
+        contentView.addSubview(cancelButton)
+        cancelButton.translatesAutoresizingMaskIntoConstraints = false
+        cancelButton.target = self
+        cancelButton.action = #selector(cancelTimer)
+        cancelButton.isBordered = false
+        cancelButton.bezelStyle = .regularSquare
+        cancelButton.focusRingType = .none
+        cancelButton.image = NSImage(
+            systemSymbolName: "xmark.circle.fill",
+            accessibilityDescription: "Cancel focus timer"
+        )
+        cancelButton.imagePosition = .imageOnly
+        cancelButton.imageScaling = .scaleProportionallyDown
+        cancelButton.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+
+        NSLayoutConstraint.activate([
+            contentView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            iconView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+            iconView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+
+            textField.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 7),
+            textField.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+
+            cancelButton.leadingAnchor.constraint(greaterThanOrEqualTo: textField.trailingAnchor, constant: 8),
+            cancelButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            cancelButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            cancelButton.widthAnchor.constraint(equalToConstant: Self.cancelButtonSize),
+            cancelButton.heightAnchor.constraint(equalToConstant: Self.cancelButtonSize)
+        ])
+    }
+
+    @objc private func cancelTimer() {
+        onCancel()
+    }
+
+    private var accentColor: NSColor {
+        snapshot.isEndingSoon ? .systemYellow : .systemTeal
     }
 }
 

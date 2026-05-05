@@ -25,6 +25,9 @@ enum AppStorage {
     private static let eventPreferencesURL = rootDirectory
         .appendingPathComponent("event-preferences.json")
 
+    private static let focusTimerURL = rootDirectory
+        .appendingPathComponent("focus-timer.json")
+
     private static let configurationURL = rootDirectory
         .appendingPathComponent("config.json")
 
@@ -67,6 +70,24 @@ enum AppStorage {
         try ensureLayout()
         let data = try JSONEncoder().encode(preferences)
         try data.write(to: eventPreferencesURL, options: [.atomic])
+    }
+
+    static func loadFocusTimerRecord() -> FocusTimerRecord? {
+        guard let data = try? Data(contentsOf: focusTimerURL) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(FocusTimerRecord.self, from: data)
+    }
+
+    static func saveFocusTimerRecord(_ record: FocusTimerRecord) throws {
+        try ensureLayout()
+        let data = try JSONEncoder().encode(record)
+        try data.write(to: focusTimerURL, options: [.atomic])
+    }
+
+    static func clearFocusTimerRecord() {
+        try? FileManager.default.removeItem(at: focusTimerURL)
     }
 
     static func loadConfiguration(
