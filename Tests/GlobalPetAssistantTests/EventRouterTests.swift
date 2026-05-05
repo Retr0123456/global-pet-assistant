@@ -190,4 +190,79 @@ struct EventRouterTests {
         #expect(snapshot.currentSource == nil)
         #expect(router.currentState == PetAnimationState.idle)
     }
+
+    @Test
+    func testFlashDoesNotChangeActiveThreadCountOrBadgeCount() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(source: "codex-cli", level: .running, ttlMs: 10_000))
+        router.accept(LocalPetEvent(source: "terminal", type: "flash", level: .success, message: "swift test passed"))
+
+        let snapshot = router.snapshot
+        #expect(snapshot.activeEventCount == 1)
+        #expect(snapshot.activeThreads.map(\.source) == ["codex-cli"])
+        #expect(snapshot.flashMessages.count == 1)
+        #expect(router.currentState == .running)
+    }
+
+    @Test
+    func testFlashMessagesAreNewestFirstAndCappedAtThree() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(source: "one", type: "flash", level: .info, message: "first"))
+        router.accept(LocalPetEvent(source: "two", type: "flash", level: .success, message: "second"))
+        router.accept(LocalPetEvent(source: "three", type: "flash", level: .warning, message: "third"))
+        router.accept(LocalPetEvent(source: "four", type: "flash", level: .danger, message: "fourth"))
+
+        let snapshot = router.snapshot
+        #expect(snapshot.flashMessages.map(\.message) == ["fourth", "third", "second"])
+        #expect(snapshot.flashMessages.count == 3)
+        #expect(snapshot.activeEventCount == 0)
+    }
+
+    @Test
+    func testFlashDefaultTTLExpiresIndependently() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let router = EventRouter(now: { now }, onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(source: "terminal", type: "flash", level: .success, message: "swift test passed"))
+        #expect(router.snapshot.flashMessages.count == 1)
+
+        now = now.addingTimeInterval(4.6)
+        #expect(router.snapshot.flashMessages.isEmpty)
+        #expect(router.currentState == .idle)
+    }
+
+    @Test
+    func testFlashDoesNotOverrideLongRunningCurrentState() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(source: "codex-cli", level: .running, ttlMs: 120_000))
+        router.accept(LocalPetEvent(source: "terminal", type: "flash", level: .danger, message: "build failed"))
+
+        let snapshot = router.snapshot
+        #expect(snapshot.currentState == .running)
+        #expect(snapshot.currentSource == "codex-cli")
+        #expect(snapshot.flashMessages.first?.state == .failed)
+        #expect(router.currentState == .running)
+    }
+
+    @Test
+    func testTransientNotifyRoutesAsFlash() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(
+            source: "terminal",
+            type: "notify",
+            level: .success,
+            message: "legacy transient",
+            transient: true
+        ))
+
+        let snapshot = router.snapshot
+        #expect(snapshot.activeEventCount == 0)
+        #expect(snapshot.flashMessages.first?.message == "legacy transient")
+        #expect(snapshot.flashMessages.first?.state == .waving)
+        #expect(router.currentState == .idle)
+    }
 }

@@ -13,9 +13,20 @@ final class EventRouter {
         let expiresAt: Date?
     }
 
+    private struct RoutedFlashEvent {
+        let id: String
+        let event: LocalPetEvent
+        let level: PetEventLevel
+        let message: String
+        let state: PetAnimationState
+        let sequence: Int
+        let expiresAt: Date
+    }
+
     private let now: () -> Date
     private let onStateChange: StateHandler
     private var eventsBySource: [String: RoutedEvent] = [:]
+    private var flashEvents: [RoutedFlashEvent] = []
     private var dedupeIndex: [String: String] = [:]
     private var expirationTimer: Timer?
     private var sequence = 0
@@ -40,6 +51,11 @@ final class EventRouter {
 
         if event.clearsRouter {
             clear()
+            return currentState
+        }
+
+        if event.isFlashEvent {
+            acceptFlash(event)
             return currentState
         }
 
@@ -78,6 +94,7 @@ final class EventRouter {
     @discardableResult
     func clear() -> PetAnimationState {
         eventsBySource.removeAll()
+        flashEvents.removeAll()
         dedupeIndex.removeAll()
         expirationTimer?.invalidate()
         expirationTimer = nil
@@ -119,13 +136,52 @@ final class EventRouter {
                 )
             }
 
+        let flashMessages = flashEvents.map { flashEvent in
+            PetFlashSnapshot(
+                id: flashEvent.id,
+                source: flashEvent.event.source,
+                level: flashEvent.level,
+                message: flashEvent.message,
+                state: flashEvent.state,
+                expiresAt: flashEvent.expiresAt
+            )
+        }
+
         return EventRouterSnapshot(
             currentState: currentState,
             activeEventCount: eventsBySource.count,
             currentSource: currentSource,
             hasAction: currentAction != nil,
-            activeThreads: activeThreads
+            activeThreads: activeThreads,
+            flashMessages: flashMessages
         )
+    }
+
+    private func acceptFlash(_ event: LocalPetEvent) {
+        guard let expiresAt = expirationDate(forFlash: event) else {
+            notifySnapshotChange()
+            scheduleExpirationTimer()
+            return
+        }
+
+        sequence += 1
+        let flashEvent = RoutedFlashEvent(
+            id: "\(event.source)-\(sequence)",
+            event: event,
+            level: event.level ?? .info,
+            message: event.flashMessagePreview,
+            state: event.flashAnimationState,
+            sequence: sequence,
+            expiresAt: expiresAt
+        )
+        flashEvents.insert(flashEvent, at: 0)
+
+        if flashEvents.count > Self.maxFlashEventCount {
+            flashEvents.removeLast(flashEvents.count - Self.maxFlashEventCount)
+        }
+
+        scheduleExpirationTimer()
+        notifySnapshotChange()
     }
 
     private func removeEvent(forSource source: String) {
@@ -147,8 +203,12 @@ final class EventRouter {
             }
             return nil
         }
+        let originalFlashCount = flashEvents.count
+        flashEvents.removeAll { event in
+            event.expiresAt <= date
+        }
 
-        guard !expiredSources.isEmpty else {
+        guard !expiredSources.isEmpty || flashEvents.count != originalFlashCount else {
             return
         }
 
@@ -184,7 +244,8 @@ final class EventRouter {
         expirationTimer?.invalidate()
 
         let now = now()
-        guard let nextExpiration = eventsBySource.values.compactMap(\.expiresAt).min() else {
+        let nextExpirations = eventsBySource.values.compactMap(\.expiresAt) + flashEvents.map(\.expiresAt)
+        guard let nextExpiration = nextExpirations.min() else {
             expirationTimer = nil
             return
         }
@@ -199,6 +260,15 @@ final class EventRouter {
 
     private func expirationDate(for event: LocalPetEvent) -> Date? {
         let ttlMs = event.ttlMs ?? defaultTTL(for: event.resolvedPetState)
+        guard ttlMs > 0 else {
+            return nil
+        }
+
+        return now().addingTimeInterval(TimeInterval(ttlMs) / 1000)
+    }
+
+    private func expirationDate(forFlash event: LocalPetEvent) -> Date? {
+        let ttlMs = event.ttlMs ?? Self.defaultFlashTTL
         guard ttlMs > 0 else {
             return nil
         }
@@ -237,6 +307,9 @@ final class EventRouter {
     private func notifySnapshotChange() {
         onSnapshotChange?(makeSnapshot())
     }
+
+    private static let maxFlashEventCount = 3
+    private static let defaultFlashTTL = 4_500
 }
 
 struct PetThreadSnapshot: Equatable {
@@ -249,10 +322,20 @@ struct PetThreadSnapshot: Equatable {
     let state: PetAnimationState
 }
 
+struct PetFlashSnapshot: Equatable {
+    let id: String
+    let source: String
+    let level: PetEventLevel
+    let message: String
+    let state: PetAnimationState
+    let expiresAt: Date
+}
+
 struct EventRouterSnapshot {
     let currentState: PetAnimationState
     let activeEventCount: Int
     let currentSource: String?
     let hasAction: Bool
     let activeThreads: [PetThreadSnapshot]
+    let flashMessages: [PetFlashSnapshot]
 }

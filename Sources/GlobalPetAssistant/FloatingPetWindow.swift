@@ -116,8 +116,11 @@ final class FloatingPetWindow: NSPanel {
             return
         }
 
+        let nextOriginX = petContentView.preservesRightEdgeOnResize
+            ? frame.maxX - desiredSize.width
+            : frame.minX
         let nextFrame = NSRect(
-            x: frame.maxX - desiredSize.width,
+            x: nextOriginX,
             y: frame.maxY - desiredSize.height,
             width: desiredSize.width,
             height: desiredSize.height
@@ -229,6 +232,11 @@ final class PetWindowContentView: NSView {
     private static let threadStackSpacing: CGFloat = 8
     private static let threadPanelGap: CGFloat = 8
     private static let badgeSize: CGFloat = 30
+    private static let flashStackWidth: CGFloat = 220
+    private static let flashRowHeight: CGFloat = 34
+    private static let flashStackSpacing: CGFloat = 6
+    private static let flashPetGap: CGFloat = 8
+    private static let flashTopOffset: CGFloat = 8
 
     var onClick: (() -> Void)?
     var onHoverChanged: ((Bool) -> Void)?
@@ -238,15 +246,23 @@ final class PetWindowContentView: NSView {
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
     var onDesiredSizeChanged: (() -> Void)?
+    var preservesRightEdgeOnResize: Bool {
+        !hasFlashMessages || isFlashPlacedLeft
+    }
 
     var desiredContentSize: NSSize {
+        let petSize = petView.intrinsicContentSize
+        let flashSideWidth = hasFlashMessages ? Self.flashStackWidth + Self.flashPetGap : 0
+        let primaryWidth = petSize.width + flashSideWidth
+        let primaryHeight = max(petSize.height, flashStackHeight + Self.flashTopOffset)
+
         guard isThreadPanelExpanded else {
-            return petView.intrinsicContentSize
+            return NSSize(width: primaryWidth, height: primaryHeight)
         }
 
         return NSSize(
-            width: max(petView.intrinsicContentSize.width, Self.threadPanelMaxWidth),
-            height: petView.intrinsicContentSize.height + Self.threadPanelGap + currentThreadPanelHeight
+            width: max(primaryWidth, Self.threadPanelMaxWidth),
+            height: primaryHeight + Self.threadPanelGap + currentThreadPanelHeight
         )
     }
 
@@ -255,7 +271,12 @@ final class PetWindowContentView: NSView {
     private let threadPanelView = NSView()
     private let threadPanelContentView = NSView()
     private let threadStackView = NSStackView()
+    private let flashStackView = NSStackView()
     private var threadPanelHeightConstraint: NSLayoutConstraint?
+    private var petLeadingConstraint: NSLayoutConstraint?
+    private var petTrailingConstraint: NSLayoutConstraint?
+    private var flashLeadingConstraint: NSLayoutConstraint?
+    private var flashTrailingConstraint: NSLayoutConstraint?
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
     private var didMouseDownOnPet = false
@@ -265,6 +286,10 @@ final class PetWindowContentView: NSView {
     private var hoverTrackingArea: NSTrackingArea?
     private var threadSnapshot: EventRouterSnapshot?
     private var isThreadPanelExpanded = false
+    private var isFlashPlacedLeft = true
+    private var hasFlashMessages: Bool {
+        !(threadSnapshot?.flashMessages.isEmpty ?? true)
+    }
 
     init(wrapping petView: PetSpriteView) {
         self.petView = petView
@@ -277,12 +302,26 @@ final class PetWindowContentView: NSView {
 
         configureThreadBadgeButton()
         configureThreadPanel()
+        configureFlashStack()
 
         let panelHeightConstraint = threadPanelView.heightAnchor.constraint(equalToConstant: Self.threadPanelMinHeight)
         threadPanelHeightConstraint = panelHeightConstraint
+        let petLeadingConstraint = petView.leadingAnchor.constraint(equalTo: leadingAnchor)
+        let petTrailingConstraint = petView.trailingAnchor.constraint(equalTo: trailingAnchor)
+        let flashLeadingConstraint = flashStackView.leadingAnchor.constraint(
+            equalTo: petView.trailingAnchor,
+            constant: Self.flashPetGap
+        )
+        let flashTrailingConstraint = flashStackView.trailingAnchor.constraint(
+            equalTo: petView.leadingAnchor,
+            constant: -Self.flashPetGap
+        )
+        self.petLeadingConstraint = petLeadingConstraint
+        self.petTrailingConstraint = petTrailingConstraint
+        self.flashLeadingConstraint = flashLeadingConstraint
+        self.flashTrailingConstraint = flashTrailingConstraint
 
         NSLayoutConstraint.activate([
-            petView.trailingAnchor.constraint(equalTo: trailingAnchor),
             petView.topAnchor.constraint(equalTo: topAnchor),
             petView.widthAnchor.constraint(equalToConstant: petView.intrinsicContentSize.width),
             petView.heightAnchor.constraint(equalToConstant: petView.intrinsicContentSize.height),
@@ -295,8 +334,12 @@ final class PetWindowContentView: NSView {
             threadPanelView.centerXAnchor.constraint(equalTo: centerXAnchor),
             threadPanelView.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth),
             threadPanelView.topAnchor.constraint(equalTo: petView.bottomAnchor, constant: Self.threadPanelGap),
-            panelHeightConstraint
+            panelHeightConstraint,
+
+            flashStackView.topAnchor.constraint(equalTo: petView.topAnchor, constant: Self.flashTopOffset),
+            flashStackView.widthAnchor.constraint(equalToConstant: Self.flashStackWidth)
         ])
+        petTrailingConstraint.isActive = true
 
         updateThreadSnapshot(nil)
     }
@@ -367,6 +410,8 @@ final class PetWindowContentView: NSView {
             height: window.frame.height
         )
         window.setFrame(FloatingPetWindow.constrainedFrame(nextFrame), display: true)
+        updateFlashPlacement()
+        applyFlashVisibilityAndPlacement()
 
         if delta.distance(to: .zero) > clickMovementThreshold {
             didDrag = true
@@ -422,12 +467,15 @@ final class PetWindowContentView: NSView {
     func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
         let previousSize = desiredContentSize
         threadSnapshot = snapshot
+        updateFlashPlacement()
 
         if snapshot?.activeEventCount ?? 0 == 0 {
             isThreadPanelExpanded = false
         }
 
         updateThreadBadge()
+        rebuildFlashStack()
+        applyFlashVisibilityAndPlacement()
         rebuildThreadPanel()
         updateThreadPanelHeight()
         applyThreadPanelVisibility()
@@ -449,6 +497,8 @@ final class PetWindowContentView: NSView {
         updateThreadBadge()
         updateThreadPanelHeight()
         applyThreadPanelVisibility()
+        updateFlashPlacement()
+        applyFlashVisibilityAndPlacement()
 
         let nextSize = desiredContentSize
         if previousSize != nextSize {
@@ -501,6 +551,68 @@ final class PetWindowContentView: NSView {
             threadStackView.topAnchor.constraint(equalTo: threadPanelContentView.topAnchor, constant: Self.threadPanelVerticalInset),
             threadStackView.bottomAnchor.constraint(equalTo: threadPanelContentView.bottomAnchor, constant: -Self.threadPanelVerticalInset)
         ])
+    }
+
+    private func configureFlashStack() {
+        addSubview(flashStackView)
+        flashStackView.translatesAutoresizingMaskIntoConstraints = false
+        flashStackView.orientation = .vertical
+        flashStackView.alignment = .width
+        flashStackView.distribution = .fill
+        flashStackView.spacing = Self.flashStackSpacing
+        flashStackView.isHidden = true
+    }
+
+    private func updateFlashPlacement() {
+        guard let window else {
+            return
+        }
+
+        let screen = NSScreen.screens.first { screen in
+            screen.visibleFrame.intersects(window.frame)
+        } ?? window.screen ?? NSScreen.main
+        guard let visibleFrame = screen?.visibleFrame else {
+            return
+        }
+
+        let petFrameInWindow = convert(petView.frame, to: nil)
+        let petCenterX = window.frame.minX + petFrameInWindow.midX
+        isFlashPlacedLeft = petCenterX >= visibleFrame.midX
+    }
+
+    private func rebuildFlashStack() {
+        flashStackView.arrangedSubviews.forEach { view in
+            flashStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        let messages = threadSnapshot?.flashMessages ?? []
+        for message in messages {
+            let row = FlashMessageRowView(message: message)
+            row.heightAnchor.constraint(equalToConstant: Self.flashRowHeight).isActive = true
+            row.widthAnchor.constraint(equalToConstant: Self.flashStackWidth).isActive = true
+            flashStackView.addArrangedSubview(row)
+        }
+    }
+
+    private func applyFlashVisibilityAndPlacement() {
+        let hasMessages = hasFlashMessages
+        flashStackView.isHidden = !hasMessages
+
+        petLeadingConstraint?.isActive = false
+        petTrailingConstraint?.isActive = false
+        flashLeadingConstraint?.isActive = false
+        flashTrailingConstraint?.isActive = false
+
+        if hasMessages, !isFlashPlacedLeft {
+            petLeadingConstraint?.isActive = true
+            flashLeadingConstraint?.isActive = true
+        } else {
+            petTrailingConstraint?.isActive = true
+            if hasMessages {
+                flashTrailingConstraint?.isActive = true
+            }
+        }
     }
 
     private func updateThreadBadge() {
@@ -573,8 +685,133 @@ final class PetWindowContentView: NSView {
         return max(Self.threadPanelMinHeight, contentHeight)
     }
 
+    private var flashStackHeight: CGFloat {
+        let count = threadSnapshot?.flashMessages.count ?? 0
+        guard count > 0 else {
+            return 0
+        }
+
+        return CGFloat(count) * Self.flashRowHeight
+            + CGFloat(max(count - 1, 0)) * Self.flashStackSpacing
+    }
+
     private func updateThreadPanelHeight() {
         threadPanelHeightConstraint?.constant = currentThreadPanelHeight
+    }
+}
+
+private final class FlashMessageRowView: NSView {
+    private static let cornerRadius: CGFloat = 8
+    private static let stripWidth: CGFloat = 3
+    private static let iconSize: CGFloat = 14
+
+    private let message: PetFlashSnapshot
+    private let contentView = NSView()
+    private let stripView = NSView()
+    private let iconView = NSImageView()
+    private let textField = NSTextField(labelWithString: "")
+
+    init(message: PetFlashSnapshot) {
+        self.message = message
+        super.init(frame: .zero)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    private func setupView() {
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+
+        addSubview(contentView)
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
+        contentView.layer?.cornerRadius = Self.cornerRadius
+        contentView.layer?.borderWidth = 1
+        contentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        contentView.layer?.masksToBounds = true
+
+        contentView.addSubview(stripView)
+        stripView.translatesAutoresizingMaskIntoConstraints = false
+        stripView.wantsLayer = true
+        stripView.layer?.backgroundColor = accentColor.cgColor
+
+        contentView.addSubview(iconView)
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.image = NSImage(
+            systemSymbolName: symbolName,
+            accessibilityDescription: nil
+        )
+        iconView.contentTintColor = accentColor
+        iconView.imageScaling = .scaleProportionallyDown
+
+        contentView.addSubview(textField)
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.stringValue = message.message
+        textField.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        textField.textColor = NSColor.white.withAlphaComponent(0.88)
+        textField.lineBreakMode = .byTruncatingTail
+        textField.maximumNumberOfLines = 1
+        textField.alignment = .left
+
+        NSLayoutConstraint.activate([
+            contentView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            stripView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            stripView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            stripView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            stripView.widthAnchor.constraint(equalToConstant: Self.stripWidth),
+
+            iconView.leadingAnchor.constraint(equalTo: stripView.trailingAnchor, constant: 8),
+            iconView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+
+            textField.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
+            textField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+            textField.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+        ])
+    }
+
+    private var accentColor: NSColor {
+        switch message.level {
+        case .success:
+            return NSColor.systemGreen.withAlphaComponent(0.9)
+        case .danger:
+            return NSColor.systemRed.withAlphaComponent(0.9)
+        case .warning:
+            return NSColor.systemYellow.withAlphaComponent(0.9)
+        case .running:
+            return NSColor.systemBlue.withAlphaComponent(0.85)
+        case .info:
+            return NSColor.white.withAlphaComponent(0.62)
+        }
+    }
+
+    private var symbolName: String {
+        switch message.level {
+        case .success:
+            return "checkmark.circle.fill"
+        case .danger:
+            return "xmark.circle.fill"
+        case .warning:
+            return "exclamationmark.triangle.fill"
+        case .running:
+            return "arrow.triangle.2.circlepath"
+        case .info:
+            return "info.circle.fill"
+        }
     }
 }
 

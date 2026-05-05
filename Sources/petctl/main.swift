@@ -17,6 +17,7 @@ struct PetctlEvent: Encodable {
     var ttlMs: Int? = nil
     var dedupeKey: String? = nil
     var action: PetctlAction? = nil
+    var transient: Bool? = nil
 }
 
 struct PetctlRequest {
@@ -24,8 +25,15 @@ struct PetctlRequest {
     var timeoutSeconds: TimeInterval
 }
 
+struct PetctlRunRequest {
+    var command: [String]
+    var source: String
+    var timeoutSeconds: TimeInterval
+}
+
 enum PetctlCommand {
     case send(PetctlRequest)
+    case run(PetctlRunRequest)
     case openFolder
     case openLogs
     case importCodexPet(String)
@@ -53,6 +61,13 @@ private let allowedLevels: Set<String> = [
     "danger"
 ]
 
+private let allowedFlashLevels: Set<String> = [
+    "info",
+    "success",
+    "warning",
+    "danger"
+]
+
 private let allowedStates: Set<String> = [
     "idle",
     "running",
@@ -68,7 +83,9 @@ private let allowedStates: Set<String> = [
 private let usage = """
 Usage:
   petctl notify --level success --title "Task complete" [--source codex-cli] [--message "..."] [--action-url https://github.com/Retr0123456/global-pet-assistant] [--action-file ~/.global-pet-assistant/logs/local-build-latest.log] [--action-app com.openai.codex] [--timeout 5]
+  petctl flash --level success --message "swift test passed" [--source terminal] [--ttl-ms 4500] [--timeout 5]
   petctl state running --message "Working..." [--source codex-cli] [--ttl-ms 15000] [--timeout 5]
+  petctl run [--source terminal] [--timeout 5] -- swift test
   petctl clear [--source codex-cli] [--timeout 5]
   petctl open-folder
   petctl open-logs
@@ -76,7 +93,9 @@ Usage:
 
 Commands:
   notify            Send a notification event. Levels: info, running, success, warning, danger.
+  flash             Send a short-lived flash event. Levels: info, success, warning, danger.
   state             Switch directly to a pet state: idle, running, waiting, failed, review, jumping, waving, running-left, running-right.
+  run               Run a command and flash success or failure based on its exit code.
   clear             Clear active events and return the pet to idle.
   open-folder       Open ~/.global-pet-assistant/pets in Finder.
   open-logs         Open ~/.global-pet-assistant/logs in Finder.
@@ -100,7 +119,7 @@ private func parse(_ arguments: [String]) throws -> PetctlCommand {
 
     switch command {
     case "notify":
-        var options = try parseOptions(Array(arguments.dropFirst()))
+        var options = try parseOptions(Array(arguments.dropFirst()), booleanFlags: ["transient"])
         let timeoutSeconds = try takeTimeout(from: &options)
         let source = options.removeValue(forKey: "source") ?? "petctl"
         let level = options.removeValue(forKey: "level") ?? "info"
@@ -118,7 +137,35 @@ private func parse(_ arguments: [String]) throws -> PetctlCommand {
             message: options.removeValue(forKey: "message"),
             ttlMs: try takeTTL(from: &options),
             dedupeKey: options.removeValue(forKey: "dedupe-key"),
-            action: action
+            action: action,
+            transient: try takeBool("transient", from: &options)
+        )
+        try rejectUnknownOptions(options)
+        return .send(PetctlRequest(event: event, timeoutSeconds: timeoutSeconds))
+    case "flash":
+        var options = try parseOptions(Array(arguments.dropFirst()))
+        let timeoutSeconds = try takeTimeout(from: &options)
+        let source = options.removeValue(forKey: "source") ?? "petctl"
+        let level = options.removeValue(forKey: "level") ?? "info"
+        guard allowedFlashLevels.contains(level) else {
+            throw PetctlError.usage("Invalid flash level: \(level).")
+        }
+        let state = options.removeValue(forKey: "state")
+        if let state, !allowedStates.contains(state) {
+            throw PetctlError.usage("Invalid state: \(state).")
+        }
+        guard let message = options.removeValue(forKey: "message"),
+              !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            throw PetctlError.usage("Missing --message for flash.")
+        }
+        let event = PetctlEvent(
+            source: source,
+            type: "flash",
+            level: level,
+            message: message,
+            state: state,
+            ttlMs: try takeTTL(from: &options)
         )
         try rejectUnknownOptions(options)
         return .send(PetctlRequest(event: event, timeoutSeconds: timeoutSeconds))
@@ -156,6 +203,8 @@ private func parse(_ arguments: [String]) throws -> PetctlCommand {
         )
         try rejectUnknownOptions(options)
         return .send(PetctlRequest(event: event, timeoutSeconds: timeoutSeconds))
+    case "run":
+        return try parseRunCommand(Array(arguments.dropFirst()))
     case "open-folder":
         guard arguments.count == 1 else {
             throw PetctlError.usage("open-folder does not accept arguments.")
@@ -186,6 +235,8 @@ private func run(_ command: PetctlCommand) throws {
     switch command {
     case .send(let request):
         try send(request)
+    case .run(let request):
+        try executeRun(request)
     case .openFolder:
         try openPetFolder()
     case .openLogs:
@@ -195,7 +246,29 @@ private func run(_ command: PetctlCommand) throws {
     }
 }
 
-private func parseOptions(_ arguments: [String]) throws -> [String: String] {
+private func parseRunCommand(_ arguments: [String]) throws -> PetctlCommand {
+    guard let separatorIndex = arguments.firstIndex(of: "--") else {
+        throw PetctlError.usage("Usage: petctl run [--source terminal] [--timeout 5] -- <command> [args...]")
+    }
+
+    var options = try parseOptions(Array(arguments[..<separatorIndex]))
+    let command = Array(arguments[arguments.index(after: separatorIndex)...])
+    guard !command.isEmpty else {
+        throw PetctlError.usage("Missing command after --.")
+    }
+
+    let timeoutSeconds = try takeTimeout(from: &options)
+    let source = options.removeValue(forKey: "source") ?? "petctl-run"
+    try rejectUnknownOptions(options)
+
+    return .run(PetctlRunRequest(
+        command: command,
+        source: source,
+        timeoutSeconds: timeoutSeconds
+    ))
+}
+
+private func parseOptions(_ arguments: [String], booleanFlags: Set<String> = []) throws -> [String: String] {
     var options: [String: String] = [:]
     var index = 0
 
@@ -206,6 +279,13 @@ private func parseOptions(_ arguments: [String]) throws -> [String: String] {
         }
 
         let key = String(rawKey.dropFirst(2))
+        if booleanFlags.contains(key),
+           (index + 1 == arguments.count || arguments[index + 1].hasPrefix("--")) {
+            options[key] = "true"
+            index += 1
+            continue
+        }
+
         guard index + 1 < arguments.count else {
             throw PetctlError.usage("Missing value for \(rawKey).")
         }
@@ -215,6 +295,21 @@ private func parseOptions(_ arguments: [String]) throws -> [String: String] {
     }
 
     return options
+}
+
+private func takeBool(_ key: String, from options: inout [String: String]) throws -> Bool? {
+    guard let rawValue = options.removeValue(forKey: key) else {
+        return nil
+    }
+
+    switch rawValue.lowercased() {
+    case "true", "yes", "1":
+        return true
+    case "false", "no", "0":
+        return false
+    default:
+        throw PetctlError.usage("Invalid --\(key) value: \(rawValue).")
+    }
 }
 
 private func takeTTL(from options: inout [String: String]) throws -> Int? {
@@ -377,6 +472,73 @@ private func replaceCopy(from sourceURL: URL, to destinationURL: URL) throws {
     }
 
     try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+}
+
+private func executeRun(_ request: PetctlRunRequest) throws -> Never {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = request.command
+
+    do {
+        try process.run()
+    } catch {
+        try? sendFlash(
+            source: request.source,
+            level: "danger",
+            message: "\(commandDescription(request.command)) could not start",
+            timeoutSeconds: request.timeoutSeconds
+        )
+        throw error
+    }
+
+    process.waitUntilExit()
+
+    let exitCode: Int32
+    switch process.terminationReason {
+    case .exit:
+        exitCode = process.terminationStatus
+    case .uncaughtSignal:
+        exitCode = 128 + process.terminationStatus
+    @unknown default:
+        exitCode = process.terminationStatus
+    }
+
+    let description = commandDescription(request.command)
+    let level = exitCode == 0 ? "success" : "danger"
+    let message = exitCode == 0
+        ? "\(description) passed"
+        : "\(description) failed (exit \(exitCode))"
+    do {
+        try sendFlash(
+            source: request.source,
+            level: level,
+            message: message,
+            timeoutSeconds: request.timeoutSeconds
+        )
+    } catch {
+        fputs("petctl run: command finished, but flash failed: \(String(describing: error))\n", stderr)
+    }
+
+    exit(exitCode)
+}
+
+private func sendFlash(
+    source: String,
+    level: String,
+    message: String,
+    timeoutSeconds: TimeInterval
+) throws {
+    let event = PetctlEvent(
+        source: source,
+        type: "flash",
+        level: level,
+        message: message
+    )
+    try send(PetctlRequest(event: event, timeoutSeconds: timeoutSeconds))
+}
+
+private func commandDescription(_ command: [String]) -> String {
+    command.joined(separator: " ")
 }
 
 private func send(_ requestEnvelope: PetctlRequest) throws {

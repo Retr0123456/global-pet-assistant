@@ -65,6 +65,24 @@ final class PetBehaviorController {
         }
     }
 
+    func handleFlash(level: PetEventLevel, state: PetAnimationState) {
+        guard dragDirection == nil else {
+            return
+        }
+
+        let animationState: PetAnimationState
+        switch level {
+        case .danger:
+            animationState = .failed
+        case .success:
+            animationState = state == .review ? .waving : state
+        case .warning, .running, .info:
+            animationState = state
+        }
+
+        playBriefLoop(animationState, duration: 1.2)
+    }
+
     func handleDragChanged(direction: PetDragDirection?) {
         guard let direction else {
             if dragDirection != nil {

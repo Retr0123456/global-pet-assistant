@@ -1,6 +1,6 @@
 import Foundation
 
-enum PetEventLevel: String, Codable {
+enum PetEventLevel: String, Codable, Equatable {
     case info
     case running
     case success
@@ -28,6 +28,7 @@ struct LocalPetEvent: Codable, Equatable {
     var dedupeKey: String?
     var action: LocalPetAction?
     var cwd: String?
+    var transient: Bool?
 
     enum CodingKeys: String, CodingKey {
         case source
@@ -40,6 +41,7 @@ struct LocalPetEvent: Codable, Equatable {
         case dedupeKey
         case action
         case cwd
+        case transient
     }
 
     init(
@@ -52,7 +54,8 @@ struct LocalPetEvent: Codable, Equatable {
         ttlMs: Int? = nil,
         dedupeKey: String? = nil,
         action: LocalPetAction? = nil,
-        cwd: String? = nil
+        cwd: String? = nil,
+        transient: Bool? = nil
     ) {
         self.source = source.isEmpty ? "unknown" : source
         self.type = type
@@ -64,6 +67,7 @@ struct LocalPetEvent: Codable, Equatable {
         self.dedupeKey = dedupeKey
         self.action = action
         self.cwd = cwd
+        self.transient = transient
     }
 
     init(from decoder: Decoder) throws {
@@ -79,6 +83,7 @@ struct LocalPetEvent: Codable, Equatable {
         dedupeKey = try container.decodeIfPresent(String.self, forKey: .dedupeKey)
         action = try container.decodeIfPresent(LocalPetAction.self, forKey: .action)
         cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
+        transient = try container.decodeIfPresent(Bool.self, forKey: .transient)
     }
 
     var resolvedPetState: PetAnimationState {
@@ -102,6 +107,10 @@ struct LocalPetEvent: Codable, Equatable {
 
     var isClearEvent: Bool {
         type?.lowercased() == "clear"
+    }
+
+    var isFlashEvent: Bool {
+        type?.lowercased() == "flash" || transient == true
     }
 
     var clearsRouter: Bool {
@@ -163,6 +172,43 @@ struct LocalPetEvent: Codable, Equatable {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
         return Self.truncate(normalized, limit: 120)
+    }
+
+    var flashMessagePreview: String {
+        let candidates = [
+            message,
+            title,
+            level?.rawValue,
+            source
+        ]
+
+        let normalized = candidates
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? "Event received"
+
+        return Self.truncate(
+            normalized.split(whereSeparator: \.isWhitespace).joined(separator: " "),
+            limit: 96
+        )
+    }
+
+    var flashAnimationState: PetAnimationState {
+        if let state {
+            return state
+        }
+
+        switch level {
+        case .danger:
+            return .failed
+        case .warning:
+            return .waiting
+        case .success:
+            return .waving
+        case .running:
+            return .jumping
+        case .info, .none:
+            return .waving
+        }
     }
 
     private func directoryName(from rawPath: String?) -> String? {

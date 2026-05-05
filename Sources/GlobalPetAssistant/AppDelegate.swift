@@ -263,7 +263,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         petWindow?.show()
         AuditLogger.appendRuntime(status: "pet_window_shown", message: "Accepted event from \(event.source)")
-        return eventRouter.accept(event)
+        let selectedState = eventRouter.accept(event)
+        if event.isFlashEvent {
+            petBehaviorController?.handleFlash(
+                level: event.level ?? .info,
+                state: event.flashAnimationState
+            )
+        }
+        return selectedState
     }
 
     private func handlePetClick() {

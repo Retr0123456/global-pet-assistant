@@ -92,6 +92,9 @@ curl -X POST http://127.0.0.1:17321/events \
   -d '{"source":"manual","type":"task.completed","level":"success","title":"Task complete"}'
 
 swift run petctl notify --level success --title "Task complete"
+swift run petctl flash --level success --message "swift test passed"
+swift run petctl flash --level danger --message "build failed"
+swift run petctl run -- swift test
 swift run petctl state running --message "Working..."
 swift run petctl clear
 swift run petctl notify \
@@ -117,6 +120,20 @@ swift run petctl notify \
 
 curl -fsS http://127.0.0.1:17321/healthz
 ```
+
+Kitty manual command flash:
+
+```bash
+Tools/install-kitty-command-hook.sh
+```
+
+The installer copies `examples/hooks/kitty-command-flash.zsh` to
+`~/.global-pet-assistant/hooks/` and adds a guarded source block to `~/.zshrc`.
+It only runs in interactive kitty zsh sessions. Failed commands send a danger
+flash; successful commands only send a success flash when they take at least
+`GPA_KITTY_COMMAND_FLASH_MIN_SUCCESS_MS` milliseconds, default `5000`.
+Set `GPA_KITTY_COMMAND_FLASH=0` to disable it for a session. High-frequency
+commands such as `cd`, `ls`, `pwd`, and `git status` are ignored.
 
 `/healthz` returns the app liveness status plus the router snapshot (`state` and `activeEvents`) so scripts can distinguish a reachable app from an idle or busy pet.
 
