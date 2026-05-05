@@ -12,7 +12,7 @@ final class PetSpriteView: NSView {
     private let atlas: PetAtlas
     private let spriteLayer = CALayer()
     private var timer: Timer?
-    private var currentFrames: [CGImage] = []
+    private var currentFrames: [PetAtlasFrame] = []
     private var frameIndex = 0
     private var playbackGeneration = 0
 
@@ -28,6 +28,7 @@ final class PetSpriteView: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
         spriteLayer.frame = bounds
+        spriteLayer.contents = atlas.image
         spriteLayer.contentsGravity = .resizeAspect
         spriteLayer.magnificationFilter = .nearest
         spriteLayer.minificationFilter = .nearest
@@ -146,7 +147,7 @@ final class PetSpriteView: NSView {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        spriteLayer.contents = currentFrames[frameIndex]
+        spriteLayer.contentsRect = currentFrames[frameIndex].contentsRect
         CATransaction.commit()
     }
 }

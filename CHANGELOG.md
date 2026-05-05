@@ -9,6 +9,10 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 - No unreleased changes yet.
 
+## 0.3.2 - 2026-05-05
+
+- Reduced pet animation memory usage by rendering from one atlas image with Core Animation frame rects instead of keeping cropped frame images resident.
+
 ## 0.3.1 - 2026-05-05
 
 - Added quick status icons to long-running thread panel rows for running, waiting, success, failure, and approval-required states.

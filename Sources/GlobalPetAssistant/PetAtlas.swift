@@ -83,7 +83,8 @@ struct PetAtlas {
     static let cellWidth = 192
     static let cellHeight = 208
 
-    let framesByState: [PetAnimationState: [CGImage]]
+    let image: CGImage
+    let framesByState: [PetAnimationState: [PetAtlasFrame]]
 
     init(contentsOf url: URL) throws {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
@@ -96,15 +97,17 @@ struct PetAtlas {
             throw PetAtlasError.unreadableImage(url.path)
         }
 
-        var frames: [PetAnimationState: [CGImage]] = [:]
+        self.image = image
+
+        var frames: [PetAnimationState: [PetAtlasFrame]] = [:]
         for state in PetAnimationState.allCases {
-            frames[state] = try Self.makeFrames(for: state, from: image)
+            frames[state] = Self.makeFrames(for: state)
         }
 
         framesByState = frames
     }
 
-    func frames(for state: PetAnimationState) -> [CGImage] {
+    func frames(for state: PetAnimationState) -> [PetAtlasFrame] {
         framesByState[state] ?? framesByState[.idle] ?? []
     }
 
@@ -128,22 +131,26 @@ struct PetAtlas {
         }
     }
 
-    private static func makeFrames(for state: PetAnimationState, from image: CGImage) throws -> [CGImage] {
-        try (0..<state.frameCount).map { column in
-            let rect = CGRect(
-                x: column * Self.cellWidth,
-                y: state.row * Self.cellHeight,
-                width: Self.cellWidth,
-                height: Self.cellHeight
+    static func makeFrames(for state: PetAnimationState) -> [PetAtlasFrame] {
+        (0..<state.frameCount).map { column in
+            PetAtlasFrame(
+                column: column,
+                row: state.row,
+                contentsRect: CGRect(
+                    x: CGFloat(column) / CGFloat(Self.columns),
+                    y: CGFloat(state.row) / CGFloat(Self.rows),
+                    width: 1.0 / CGFloat(Self.columns),
+                    height: 1.0 / CGFloat(Self.rows)
+                )
             )
-
-            guard let frame = image.cropping(to: rect) else {
-                throw PetAtlasError.invalidFrame(state: state.rawValue, column: column)
-            }
-
-            return frame
         }
     }
+}
+
+struct PetAtlasFrame: Equatable {
+    let column: Int
+    let row: Int
+    let contentsRect: CGRect
 }
 
 enum PetAtlasError: Error, CustomStringConvertible {
@@ -156,7 +163,6 @@ enum PetAtlasError: Error, CustomStringConvertible {
         expectedWidth: Int,
         expectedHeight: Int
     )
-    case invalidFrame(state: String, column: Int)
 
     var description: String {
         switch self {
@@ -166,8 +172,6 @@ enum PetAtlasError: Error, CustomStringConvertible {
             "Cannot read pixel dimensions for pet atlas at \(path)."
         case let .invalidDimensions(path, actualWidth, actualHeight, expectedWidth, expectedHeight):
             "Invalid pet atlas dimensions for \(path): got \(actualWidth)x\(actualHeight), expected \(expectedWidth)x\(expectedHeight)."
-        case let .invalidFrame(state, column):
-            "Cannot crop frame \(column) for state \(state)."
         }
     }
 }
