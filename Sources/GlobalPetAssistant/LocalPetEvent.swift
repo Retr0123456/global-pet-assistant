@@ -8,6 +8,15 @@ enum PetEventLevel: String, Codable, Equatable {
     case danger
 }
 
+enum PetThreadStatus: String, Codable, Equatable {
+    case running
+    case waiting
+    case success
+    case failed
+    case approvalRequired = "approval-required"
+    case info
+}
+
 struct LocalPetAction: Codable, Equatable {
     var type: String
     var url: String?
@@ -172,6 +181,31 @@ struct LocalPetEvent: Codable, Equatable {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
         return Self.truncate(normalized, limit: 120)
+    }
+
+    var threadStatus: PetThreadStatus {
+        let normalizedType = type?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+
+        if normalizedType.contains("permission")
+            || normalizedType.contains("approval")
+            || normalizedType.contains("action_required") {
+            return .approvalRequired
+        }
+
+        switch resolvedPetState {
+        case .failed:
+            return .failed
+        case .waiting:
+            return .waiting
+        case .review:
+            return .success
+        case .running, .runningLeft, .runningRight, .jumping:
+            return .running
+        case .idle, .waving:
+            return .info
+        }
     }
 
     var flashMessagePreview: String {

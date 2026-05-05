@@ -73,6 +73,62 @@ struct EventRouterTests {
         #expect(thread?.directoryName == "global-pet-assistant")
         #expect(thread?.messagePreview == "Submitted 62cea60 and created the GitHub Actions deploy task.")
         #expect(thread?.state == .running)
+        #expect(thread?.status == .running)
+    }
+
+    @Test
+    func testSnapshotIncludesQuickThreadStatus() {
+        let router = EventRouter(onStateChange: { _ in })
+
+        router.accept(LocalPetEvent(
+            source: "codex-running",
+            type: "codex.turn.running",
+            state: .running,
+            ttlMs: 10_000
+        ))
+        router.accept(LocalPetEvent(
+            source: "codex-approval",
+            type: "codex.permission.request",
+            level: .warning,
+            ttlMs: 10_000
+        ))
+        router.accept(LocalPetEvent(
+            source: "codex-success",
+            type: "codex.turn.review",
+            level: .success,
+            ttlMs: 10_000
+        ))
+        router.accept(LocalPetEvent(
+            source: "local-build",
+            type: "build.failed",
+            level: .danger,
+            ttlMs: 10_000
+        ))
+        router.accept(LocalPetEvent(
+            source: "agent-waiting",
+            type: "agent.waiting",
+            level: .warning,
+            ttlMs: 10_000
+        ))
+
+        let statusesBySource = Dictionary(
+            uniqueKeysWithValues: router.snapshot.activeThreads.map { ($0.source, $0.status) }
+        )
+
+        #expect(statusesBySource["codex-running"] == .running)
+        #expect(statusesBySource["codex-approval"] == .approvalRequired)
+        #expect(statusesBySource["codex-success"] == .success)
+        #expect(statusesBySource["local-build"] == .failed)
+        #expect(statusesBySource["agent-waiting"] == .waiting)
+    }
+
+    @Test
+    func testThreadStatusIndicatorsUseDistinctSymbols() {
+        #expect(PetThreadStatus.running.indicator.symbolName == "arrow.triangle.2.circlepath")
+        #expect(PetThreadStatus.waiting.indicator.symbolName == "hourglass")
+        #expect(PetThreadStatus.success.indicator.symbolName == "checkmark.circle.fill")
+        #expect(PetThreadStatus.failed.indicator.symbolName == "xmark.circle.fill")
+        #expect(PetThreadStatus.approvalRequired.indicator.symbolName == "exclamationmark.triangle.fill")
     }
 
     @Test

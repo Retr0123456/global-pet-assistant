@@ -238,7 +238,7 @@ final class FloatingPetWindow: NSPanel {
 }
 
 final class PetWindowContentView: NSView {
-    private static let threadPanelMaxWidth: CGFloat = 320
+    private static let threadPanelMaxWidth: CGFloat = 300
     private static let threadPanelMinHeight: CGFloat = 78
     private static let threadRowHeight: CGFloat = 78
     private static let threadPanelVerticalInset: CGFloat = 0
@@ -963,7 +963,9 @@ private final class FlashMessageRowView: NSView {
 
 private final class ThreadMessageRowView: NSView {
     private static let cornerRadius: CGFloat = 16
+    private static let statusBadgeSize: CGFloat = 30
     private static let closeButtonSize: CGFloat = 18
+    private static let actionReserveWidth: CGFloat = 28
     private static let fixedHeight: CGFloat = 78
 
     private let thread: PetThreadSnapshot
@@ -971,6 +973,7 @@ private final class ThreadMessageRowView: NSView {
     private let onDismiss: (PetThreadSnapshot) -> Void
     private let glassView = NSGlassEffectView()
     private let contentView = NSView()
+    private let statusBadgeView: ThreadStatusBadgeView
     private let textView: ThreadMessageTextView
     private let closeButton = NSButton()
     private var hoverTrackingArea: NSTrackingArea?
@@ -983,6 +986,7 @@ private final class ThreadMessageRowView: NSView {
         self.thread = thread
         self.onOpen = onOpen
         self.onDismiss = onDismiss
+        self.statusBadgeView = ThreadStatusBadgeView(status: thread.status)
         self.textView = ThreadMessageTextView(thread: thread)
         super.init(frame: .zero)
         setupView()
@@ -1054,6 +1058,9 @@ private final class ThreadMessageRowView: NSView {
         contentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
         contentView.layer?.masksToBounds = true
 
+        contentView.addSubview(statusBadgeView)
+        statusBadgeView.translatesAutoresizingMaskIntoConstraints = false
+
         contentView.addSubview(textView)
         textView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1083,13 +1090,18 @@ private final class ThreadMessageRowView: NSView {
             contentView.topAnchor.constraint(equalTo: glassView.topAnchor),
             contentView.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
 
-            closeButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             closeButton.widthAnchor.constraint(equalToConstant: Self.closeButtonSize),
             closeButton.heightAnchor.constraint(equalToConstant: Self.closeButtonSize),
 
-            textView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            statusBadgeView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            statusBadgeView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            statusBadgeView.widthAnchor.constraint(equalToConstant: Self.statusBadgeSize),
+            statusBadgeView.heightAnchor.constraint(equalToConstant: Self.statusBadgeSize),
+
+            textView.leadingAnchor.constraint(equalTo: statusBadgeView.trailingAnchor, constant: 12),
+            textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Self.actionReserveWidth),
             textView.topAnchor.constraint(equalTo: contentView.topAnchor),
             textView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
@@ -1097,6 +1109,71 @@ private final class ThreadMessageRowView: NSView {
 
     @objc private func dismissNotification() {
         onDismiss(thread)
+    }
+}
+
+private final class ThreadStatusBadgeView: NSView {
+    private static let iconSize: CGFloat = 17
+
+    private let status: PetThreadStatus
+    private let iconView = NSImageView()
+
+    init(status: PetThreadStatus) {
+        self.status = status
+        super.init(frame: .zero)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    private func setupView() {
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.backgroundColor = accentColor.withAlphaComponent(0.18).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = accentColor.withAlphaComponent(0.46).cgColor
+        layer?.cornerRadius = 15
+        layer?.masksToBounds = true
+        toolTip = status.indicator.accessibilityDescription
+
+        addSubview(iconView)
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.image = NSImage(
+            systemSymbolName: status.indicator.symbolName,
+            accessibilityDescription: status.indicator.accessibilityDescription
+        )
+        iconView.contentTintColor = accentColor
+        iconView.imageScaling = .scaleProportionallyDown
+
+        NSLayoutConstraint.activate([
+            iconView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: Self.iconSize),
+            iconView.heightAnchor.constraint(equalToConstant: Self.iconSize)
+        ])
+    }
+
+    private var accentColor: NSColor {
+        switch status {
+        case .running:
+            return NSColor.systemBlue.withAlphaComponent(0.92)
+        case .waiting:
+            return NSColor.systemYellow.withAlphaComponent(0.92)
+        case .success:
+            return NSColor.systemGreen.withAlphaComponent(0.92)
+        case .failed:
+            return NSColor.systemRed.withAlphaComponent(0.92)
+        case .approvalRequired:
+            return NSColor.systemOrange.withAlphaComponent(0.95)
+        case .info:
+            return NSColor.white.withAlphaComponent(0.68)
+        }
     }
 }
 
@@ -1128,7 +1205,7 @@ private final class ThreadMessageTextView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let textRect = bounds.insetBy(dx: 16, dy: 12)
+        let textRect = bounds.insetBy(dx: 0, dy: 12)
         let titleRect = NSRect(
             x: textRect.minX,
             y: textRect.minY,

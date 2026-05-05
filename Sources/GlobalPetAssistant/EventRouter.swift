@@ -132,7 +132,8 @@ final class EventRouter {
                     directoryName: routedEvent.event.threadDirectoryName,
                     messagePreview: routedEvent.event.threadMessagePreview,
                     action: routedEvent.event.action,
-                    state: routedEvent.state
+                    state: routedEvent.state,
+                    status: routedEvent.event.threadStatus
                 )
             }
 
@@ -320,6 +321,7 @@ struct PetThreadSnapshot: Equatable {
     let messagePreview: String
     let action: LocalPetAction?
     let state: PetAnimationState
+    let status: PetThreadStatus
 }
 
 struct PetFlashSnapshot: Equatable {

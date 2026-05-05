@@ -9,6 +9,11 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 - No unreleased changes yet.
 
+## 0.3.1 - 2026-05-05
+
+- Added quick status icons to long-running thread panel rows for running, waiting, success, failure, and approval-required states.
+- Tightened the thread panel row layout around the status icon, title, message, and dismiss button.
+
 ## 0.2.0 - 2026-05-05
 
 - Added short-lived `flash` events that stay separate from long-running task threads.
