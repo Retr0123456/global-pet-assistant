@@ -86,4 +86,28 @@ if action.get("kittyListenOn") != "unix:/tmp/mykitty":
 PY
 echo "kitty focus action mapping: ok"
 
+SUBAGENT_TRANSCRIPT="$(mktemp "${TMPDIR:-/tmp}/gpa-codex-subagent-transcript.XXXXXX.jsonl")"
+trap 'rm -f "$SUBAGENT_TRANSCRIPT"' EXIT
+printf '%s\n' '{"timestamp":"2026-05-07T00:00:00Z","type":"session_meta","payload":{"id":"019df293-b000-76d0-bcb1-c1c3bedb536d","timestamp":"2026-05-07T00:00:00Z","cwd":"/tmp/repo","originator":"codex","cli_version":"test","source":{"subAgent":{"thread_spawn":{"parent_thread_id":"019df293-afae-76d0-bcb1-c1c3bedb536d","depth":1,"agent_nickname":"Scout","agent_role":"explorer"}}},"agent_nickname":"Scout","agent_role":"explorer","model_provider":"test-provider","base_instructions":null}}' > "$SUBAGENT_TRANSCRIPT"
+
+parent_event="$(printf '%s' '{"hook_event_name":"UserPromptSubmit","session_id":"019df293-afae-76d0-bcb1-c1c3bedb536d","cwd":"/tmp/repo","prompt":"Parent prompt"}' | python3 "$HOOK" --print-event)"
+subagent_event="$(printf '{"hook_event_name":"UserPromptSubmit","session_id":"019df293-b000-76d0-bcb1-c1c3bedb536d","cwd":"/tmp/repo","prompt":"Inspect repo","transcript_path":"%s"}' "$SUBAGENT_TRANSCRIPT" | python3 "$HOOK" --print-event)"
+PARENT_EVENT="$parent_event" SUBAGENT_EVENT="$subagent_event" python3 - <<'PY'
+import json
+import os
+import sys
+
+parent = json.loads(os.environ["PARENT_EVENT"])
+subagent = json.loads(os.environ["SUBAGENT_EVENT"])
+if subagent.get("source") != parent.get("source"):
+    sys.exit(f"Expected subagent source to canonicalize to parent source, got {subagent}")
+if subagent.get("dedupeKey") != "codex:019df293-afae-76d0-bcb1-c1c3bedb536d":
+    sys.exit(f"Expected parent dedupe key, got {subagent.get('dedupeKey')}")
+if "Scout (explorer)" not in str(subagent.get("message") or ""):
+    sys.exit(f"Expected subagent label in message, got {subagent.get('message')}")
+if "019df293-b000-76d0-bcb1-c1c3bedb536d" in subagent.get("source", ""):
+    sys.exit(f"Expected child id to stay out of source, got {subagent.get('source')}")
+PY
+echo "subagent transcript parent-thread canonicalization: ok"
+
 echo "Codex hook event mapping verified."

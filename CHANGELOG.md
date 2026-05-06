@@ -7,6 +7,10 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.3.3 - 2026-05-07
+
+- Canonicalized Codex subagent hook events through transcript session metadata so spawned agents update their parent thread panel row instead of creating separate rows.
+- Polished the thread panel glass surface and row layout.
 - Installed the bundled placeholder pet into the app-owned pet directory on first launch so fresh installs no longer depend on Codex pet state.
 - Changed external pet loading to an explicit `petctl import-pet` flow backed by configurable `petImportSourceDirectories`.
 - Removed source hardcoding from the kitty command hook example and aligned release resource bundle layout with SwiftPM's runtime lookup path.

@@ -78,8 +78,9 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         fallback=fallback_session_id(cwd),
     )
     turn_id = first_nonempty(payload, ["turn_id", "turn-id"], fallback="")
-    source = f"codex-cli:{stable_session_key(session_id)}"
-    dedupe_key = f"codex:{session_id}"
+    thread_context = resolve_thread_context(payload, session_id)
+    source = f"codex-cli:{stable_session_key(thread_context['canonical_session_id'])}"
+    dedupe_key = f"codex:{thread_context['canonical_session_id']}"
 
     if hook_name == "SessionStart":
         source_name = str(payload.get("source") or "startup")
@@ -87,8 +88,8 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "source": source,
             "type": "codex.session.start",
             "state": "running",
-            "title": "Codex session started",
-            "message": compact_context([source_name]),
+            "title": session_start_title(thread_context),
+            "message": compact_context(context_parts(thread_context, [source_name])),
             "cwd": cwd,
             "action": kitty_focus_action(),
             "ttlMs": 30000,
@@ -101,8 +102,8 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "source": source,
             "type": "codex.turn.running",
             "state": "running",
-            "title": title_from_text(prompt, fallback="Codex is running"),
-            "message": compact_context([prompt]),
+            "title": title_from_text(prompt, fallback=running_title(thread_context)),
+            "message": compact_context(context_parts(thread_context, [prompt])),
             "cwd": cwd,
             "action": kitty_focus_action(),
             "ttlMs": 120000,
@@ -119,8 +120,8 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "source": source,
             "type": "codex.permission.request",
             "level": "warning",
-            "title": "Codex is waiting for approval",
-            "message": compact_context([tool_name, description]),
+            "title": permission_title(thread_context),
+            "message": compact_context(context_parts(thread_context, [tool_name, description])),
             "cwd": cwd,
             "action": kitty_focus_action(),
             "ttlMs": 300000,
@@ -133,8 +134,8 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "source": source,
             "type": "codex.turn.review",
             "level": "success",
-            "title": title_from_text(last_message, fallback="Codex task ready for review"),
-            "message": compact_context([last_message]),
+            "title": title_from_text(last_message, fallback=review_title(thread_context)),
+            "message": compact_context(context_parts(thread_context, [last_message])),
             "cwd": cwd,
             "action": kitty_focus_action(),
             "ttlMs": 300000,
@@ -142,6 +143,157 @@ def map_hook_to_pet_event(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         }
 
     return None
+
+
+def resolve_thread_context(payload: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+    session_meta = read_transcript_session_meta(payload)
+    spawn = thread_spawn_metadata(session_meta)
+    parent_thread_id = string_value(spawn, ["parent_thread_id", "parentThreadId"])
+    label = subagent_label(session_meta, spawn)
+    return {
+        "session_id": session_id,
+        "canonical_session_id": parent_thread_id or session_id,
+        "is_subagent": bool(parent_thread_id),
+        "subagent_label": label,
+    }
+
+
+def read_transcript_session_meta(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    transcript_path = first_nonempty(
+        payload,
+        ["transcript_path", "transcript-path", "transcriptPath"],
+        fallback="",
+    )
+    if not transcript_path:
+        return None
+
+    try:
+        with Path(transcript_path).expanduser().open("r", encoding="utf-8") as handle:
+            for _ in range(5):
+                line = handle.readline()
+                if not line:
+                    break
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                if item.get("type") != "session_meta":
+                    continue
+                payload_value = item.get("payload")
+                if isinstance(payload_value, dict):
+                    return payload_value
+                return None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return None
+
+
+def thread_spawn_metadata(session_meta: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(session_meta, dict):
+        return None
+    source_value = session_meta.get("source")
+    if not isinstance(source_value, dict):
+        return None
+    subagent_value = mapping_value(source_value, ["subAgent", "sub_agent", "subagent"])
+    if not isinstance(subagent_value, dict):
+        return None
+    spawn_value = mapping_value(subagent_value, ["thread_spawn", "threadSpawn"])
+    if isinstance(spawn_value, dict):
+        return spawn_value
+    return None
+
+
+def subagent_label(
+    session_meta: Optional[Dict[str, Any]],
+    spawn: Optional[Dict[str, Any]],
+) -> str:
+    nickname = first_string_value(
+        [spawn, session_meta],
+        ["agent_nickname", "agentNickname"],
+    )
+    role = first_string_value(
+        [spawn, session_meta],
+        ["agent_role", "agentRole", "agent_type", "agentType"],
+    )
+    if nickname and role:
+        return f"{nickname} ({role})"
+    if nickname:
+        return nickname
+    if role:
+        return role
+
+    agent_path = first_string_value(
+        [spawn, session_meta],
+        ["agent_path", "agentPath"],
+    )
+    if agent_path:
+        return Path(agent_path).name or agent_path
+    return ""
+
+
+def first_string_value(
+    mappings: List[Optional[Dict[str, Any]]],
+    keys: List[str],
+) -> str:
+    for mapping in mappings:
+        value = string_value(mapping, keys)
+        if value:
+            return value
+    return ""
+
+
+def string_value(mapping: Optional[Dict[str, Any]], keys: List[str]) -> str:
+    value = mapping_value(mapping, keys)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def mapping_value(mapping: Optional[Dict[str, Any]], keys: List[str]) -> Any:
+    if not isinstance(mapping, dict):
+        return None
+    normalized_keys = {normalize_key(key): value for key, value in mapping.items()}
+    for key in keys:
+        value = normalized_keys.get(normalize_key(key))
+        if value is not None:
+            return value
+    return None
+
+
+def normalize_key(value: str) -> str:
+    return "".join(char.lower() for char in str(value) if char.isalnum())
+
+
+def context_parts(thread_context: Dict[str, Any], parts: List[str]) -> List[str]:
+    label = str(thread_context.get("subagent_label") or "").strip()
+    if not thread_context.get("is_subagent"):
+        return parts
+    if label:
+        return [f"Subagent {label}", *parts]
+    return ["Subagent", *parts]
+
+
+def session_start_title(thread_context: Dict[str, Any]) -> str:
+    if thread_context.get("is_subagent"):
+        return "Codex subagent started"
+    return "Codex session started"
+
+
+def running_title(thread_context: Dict[str, Any]) -> str:
+    if thread_context.get("is_subagent"):
+        return "Codex subagent is running"
+    return "Codex is running"
+
+
+def permission_title(thread_context: Dict[str, Any]) -> str:
+    if thread_context.get("is_subagent"):
+        return "Codex subagent is waiting for approval"
+    return "Codex is waiting for approval"
+
+
+def review_title(thread_context: Dict[str, Any]) -> str:
+    if thread_context.get("is_subagent"):
+        return "Codex subagent ready for review"
+    return "Codex task ready for review"
 
 
 def first_nonempty(payload: Dict[str, Any], keys: List[str], fallback: str) -> str:
