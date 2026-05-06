@@ -29,9 +29,9 @@ struct PetPackage: Decodable {
         directoryURL = decoder.userInfo[.packageDirectoryURL] as? URL ?? URL(fileURLWithPath: "/")
     }
 
-    static func loadBundledSample() throws -> PetPackage {
-        guard let manifestURL = bundledSampleManifestURL() else {
-            throw PetPackageError.missingBundledSample
+    static func loadBundledDefaultPet() throws -> PetPackage {
+        guard let manifestURL = bundledDefaultPetManifestURL() else {
+            throw PetPackageError.missingBundledDefaultPet
         }
 
         let directoryURL = manifestURL.deletingLastPathComponent()
@@ -42,8 +42,8 @@ struct PetPackage: Decodable {
     }
 
     @discardableResult
-    static func ensureBundledSampleInstalled() throws -> PetPackage {
-        let bundledPackage = try loadBundledSample()
+    static func ensureBundledDefaultPetInstalled() throws -> PetPackage {
+        let bundledPackage = try loadBundledDefaultPet()
         let destinationDirectory = AppStorage.petsDirectory
             .appendingPathComponent(bundledPackage.id, isDirectory: true)
         let destinationManifestURL = destinationDirectory.appendingPathComponent("pet.json")
@@ -77,7 +77,7 @@ struct PetPackage: Decodable {
             return installedPet
         }
 
-        return try loadBundledSample()
+        return try loadBundledDefaultPet()
     }
 
     static func loadInstalledPets() -> [PetPackage] {
@@ -109,14 +109,14 @@ struct PetPackage: Decodable {
         return path
     }
 
-    private static func bundledSampleManifestURL() -> URL? {
+    private static func bundledDefaultPetManifestURL() -> URL? {
         bundledResourceBundleDirectories()
             .lazy
             .flatMap { bundleDirectory in
                 [
                     bundleDirectory
-                        .appendingPathComponent("SamplePets", isDirectory: true)
-                        .appendingPathComponent("placeholder", isDirectory: true)
+                        .appendingPathComponent("BundledPets", isDirectory: true)
+                        .appendingPathComponent("blobbit", isDirectory: true)
                         .appendingPathComponent("pet.json"),
                     bundleDirectory.appendingPathComponent("pet.json")
                 ]
@@ -194,13 +194,13 @@ struct PetPackage: Decodable {
 }
 
 enum PetPackageError: Error, CustomStringConvertible {
-    case missingBundledSample
+    case missingBundledDefaultPet
     case invalidSpritesheetPath(String)
 
     var description: String {
         switch self {
-        case .missingBundledSample:
-            "Bundled placeholder pet manifest is missing."
+        case .missingBundledDefaultPet:
+            "Bundled default pet manifest is missing."
         case .invalidSpritesheetPath(let path):
             "Invalid spritesheetPath in pet manifest: \(path)."
         }

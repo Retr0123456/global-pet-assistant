@@ -12,7 +12,7 @@ The project goal is to separate the pet into two layers:
 - Public source beta for macOS 26 and the AppKit Liquid Glass SDK.
 - No notarized downloadable release is published yet; build from source or package a local beta from this checkout.
 - The event API is local-only. Mutating writes require a bearer token generated on first app launch.
-- A generated placeholder pet is bundled and installed into the app-owned pet folder on first launch. Users can import compatible local pet packages.
+- Blobbit, an original generated default pet, is bundled and installed into the app-owned pet folder on first launch. Users can import compatible local pet packages.
 
 ## Goals
 
@@ -68,9 +68,9 @@ The repository currently starts with a Swift Package executable instead of an Xc
 - Minimum platform: macOS 26 with the AppKit Liquid Glass SDK
 - Runtime shape: AppKit lifecycle and floating `NSPanel`
 - Renderer shape: Core Animation layer playback from a Codex-compatible atlas, with Liquid Glass AppKit controls for notification surfaces
-- Bundled test pet: `Sources/GlobalPetAssistant/Resources/SamplePets/placeholder`
+- Bundled default pet: `Sources/GlobalPetAssistant/Resources/BundledPets/blobbit`
 - App icon: original generated image under `Assets/AppIcon`
-- Startup pet loading: first compatible pet in `~/.global-pet-assistant/pets`; the bundled placeholder is installed there on first launch as a fallback
+- Startup pet loading: first compatible pet in `~/.global-pet-assistant/pets`; Blobbit is installed there on first launch as the bundled default fallback
 - App-owned state root: `~/.global-pet-assistant`
 - Event safety: localhost-only HTTP, request size limits, source-level rate limiting, source action allowlisting, and conservative click-action validation
 
@@ -394,11 +394,8 @@ Tools/generate-app-icon.sh
 
 The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, focus timer, preview state, open pet folder, and quit controls. Right-clicking the pet exposes the fast controls: open action, clear current event, mute source, unmute all sources, pause/resume events, preview state, and open pet folder. Pet position is saved under `~/.global-pet-assistant` after drag moves, snaps to visible screen edges within 24 px, and is restored on relaunch.
 
-Regenerate the bundled placeholder atlas:
-
-```bash
-swift Tools/GeneratePlaceholderAtlas.swift Sources/GlobalPetAssistant/Resources/SamplePets/placeholder/spritesheet.png
-```
+The bundled default pet is an original generated Codex-compatible package under
+`Sources/GlobalPetAssistant/Resources/BundledPets/blobbit`.
 
 ## Documentation
 

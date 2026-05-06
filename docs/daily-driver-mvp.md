@@ -211,7 +211,7 @@ What to do:
 - Load pets from the app-owned directory.
 - Add a CLI command to open the app pet folder.
 - Add an importer from configured source directories, defaulting to `~/.codex/pets`.
-- Install the bundled placeholder into the app-owned directory so first launch does not depend on Codex state.
+- Install the bundled default pet into the app-owned directory so first launch does not depend on Codex state.
 
 Concrete first pet import:
 
@@ -231,7 +231,7 @@ How to do it:
 
 - Update `PetPackage` loading order:
   1. first compatible pet in `~/.global-pet-assistant/pets`
-  2. app-owned placeholder installed from the bundled resource
+  2. app-owned default pet installed from the bundled resource
 - Add `petctl open-folder` to open:
 
 ```text
@@ -253,7 +253,7 @@ swift run GlobalPetAssistant
 Acceptance:
 
 - The imported pet loads from `~/.global-pet-assistant/pets/<name>`.
-- If no app-owned pet exists, the app installs and loads the bundled placeholder.
+- If no app-owned pet exists, the app installs and loads the bundled default pet.
 - External pet packages are only read during explicit import.
 
 ## Priority 5: Daily-use macOS Polish

@@ -4,11 +4,12 @@ import Testing
 
 struct PetPackageTests {
     @Test
-    func testLoadsBundledPlaceholderPet() throws {
-        let package = try PetPackage.loadBundledSample()
+    func testLoadsBundledDefaultPet() throws {
+        let package = try PetPackage.loadBundledDefaultPet()
 
-        #expect(package.id == "placeholder")
-        #expect(package.spritesheetURL.lastPathComponent == "spritesheet.png")
+        #expect(package.id == "blobbit")
+        #expect(package.displayName == "Blobbit")
+        #expect(package.spritesheetURL.lastPathComponent == "spritesheet.webp")
         #expect(FileManager.default.fileExists(atPath: package.spritesheetURL.path))
     }
 

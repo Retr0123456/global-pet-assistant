@@ -51,10 +51,10 @@ dimensions before copying the local package into the app-owned pet folder. It
 does not grant redistribution rights for that asset. `import-codex-pet` remains a
 compatibility alias.
 
-## Bundled Placeholder
+## Bundled Default Pet
 
-`Sources/GlobalPetAssistant/Resources/SamplePets/placeholder/spritesheet.png`
-is a deterministic generated placeholder used for testing and fallback
-rendering. The app installs it into `~/.global-pet-assistant/pets/placeholder`
-on first launch so new users see a pet without relying on Codex state. It is
-safe to redistribute with the source code.
+`Sources/GlobalPetAssistant/Resources/BundledPets/blobbit/` contains Blobbit,
+an original generated Codex-compatible default pet package created for this
+project without third-party character references. The app installs it into
+`~/.global-pet-assistant/pets/blobbit` on first launch so new users see a pet
+without relying on Codex state. It is safe to redistribute with the source code.

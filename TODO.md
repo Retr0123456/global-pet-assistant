@@ -26,7 +26,7 @@
 - [x] Validate `spritesheetPath` without allowing path traversal.
 - [x] Support PNG and WebP.
 - [x] Add "Open pet folder" menu item.
-- [x] Install the bundled placeholder into the app-owned pet folder for first launch.
+- [x] Install the bundled default pet into the app-owned pet folder for first launch.
 - [x] Add optional importer from configured pet source directories, defaulting to `~/.codex/pets`.
 
 ## Phase 3: Event Runtime
