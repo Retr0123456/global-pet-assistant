@@ -141,27 +141,6 @@ final class FloatingPetWindow: NSPanel {
         setFrame(Self.constrainedFrame(nextFrame), display: true)
     }
 
-    func moveToNextScreen() {
-        let screens = NSScreen.screens
-        guard screens.count > 1 else {
-            return
-        }
-
-        let currentScreenIndex = screens.firstIndex { screen in
-            frame.intersects(screen.visibleFrame)
-        } ?? 0
-        let nextScreen = screens[(currentScreenIndex + 1) % screens.count]
-        let nextFrame = NSRect(
-            x: nextScreen.visibleFrame.maxX - frame.width - 40,
-            y: nextScreen.visibleFrame.minY + 80,
-            width: frame.width,
-            height: frame.height
-        )
-        setFrame(nextFrame, display: true)
-        onMoveEnded?(nextFrame.origin)
-        show()
-    }
-
     static func constrainedFrame(_ frame: NSRect) -> NSRect {
         guard let screen = bestScreen(for: frame) else {
             return frame

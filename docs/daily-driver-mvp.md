@@ -261,10 +261,10 @@ Acceptance:
 What to do after the action and pet package flow works:
 
 - Persist pet position.
-- Add launch-at-login.
+- Add launch-at-login after reliable installed-app testing.
 - Add a real menu bar icon.
 - Add pause / do-not-disturb mode.
-- Add multi-display placement.
+- Add multi-display placement after physical multi-display testing.
 
 Acceptance:
 

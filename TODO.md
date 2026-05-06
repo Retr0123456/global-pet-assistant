@@ -60,8 +60,8 @@
 ## Phase 6: macOS Polish
 
 - [x] Add menu bar icon.
-- [x] Add launch-at-login option.
-- [x] Add multi-display placement.
+- [ ] Add launch-at-login option after reliable installed-app testing.
+- [ ] Add multi-display placement after physical multi-display testing.
 - [x] Add edge snapping.
 - [x] Persist pet position.
 - [x] Add pause or do-not-disturb mode.

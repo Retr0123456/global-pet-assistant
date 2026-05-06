@@ -57,7 +57,7 @@ AppKit / Core Animation renderer
 5. `petctl` command-line helper for scripts and agent hooks.
 6. Pet states: `idle`, `running`, `waiting`, `failed`, `review`, `waving`, `jumping`, `running-left`, and `running-right`.
 7. Click action for the latest actionable notification.
-8. Menu bar and right-click controls for visibility, muting, launch-at-login, display movement, and animation preview.
+8. Menu bar and right-click controls for visibility, muting, focus timers, animation preview, and pet folder access.
 
 ## Current Implementation
 
@@ -392,7 +392,7 @@ Regenerate the app icon from `Assets/AppIcon/AppIcon.png`:
 Tools/generate-app-icon.sh
 ```
 
-The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, launch-at-login, move-to-next-display, preview state, open pet folder, and quit controls. Right-clicking the pet exposes the fast controls: open action, clear current event, mute source, unmute all sources, pause/resume events, preview state, and open pet folder. Pet position is saved under `~/.global-pet-assistant` after drag moves, snaps to visible screen edges within 24 px, and is restored on relaunch.
+The menu bar item uses a system icon and includes show/hide, pause events, mute current source, unmute all sources, focus timer, preview state, open pet folder, and quit controls. Right-clicking the pet exposes the fast controls: open action, clear current event, mute source, unmute all sources, pause/resume events, preview state, and open pet folder. Pet position is saved under `~/.global-pet-assistant` after drag moves, snaps to visible screen edges within 24 px, and is restored on relaunch.
 
 Regenerate the bundled placeholder atlas:
 

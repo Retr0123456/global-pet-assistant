@@ -9,13 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pauseEventsItem: NSMenuItem?
     private var muteCurrentSourceItem: NSMenuItem?
     private var unmuteAllSourcesItem: NSMenuItem?
-    private var launchAtLoginItem: NSMenuItem?
     private var focusTimerMenuItem: NSMenuItem?
     private var eventRouter: EventRouter?
     private var focusTimerController: FocusTimerController?
     private var eventServer: LocalEventServer?
     private let actionHandler = ActionHandler()
-    private let launchAtLoginController = LaunchAtLoginController()
     private var eventPreferences = EventPreferences()
     private var appConfiguration = AppConfiguration.defaultConfiguration
     private var authorizationToken = ""
@@ -127,11 +125,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.unmuteAllSourcesItem = unmuteAllSourcesItem
         menu.addItem(NSMenuItem.separator())
 
-        let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
-        menu.addItem(launchAtLoginItem)
-        self.launchAtLoginItem = launchAtLoginItem
-
-        menu.addItem(NSMenuItem(title: "Move to Next Display", action: #selector(moveToNextDisplay), keyEquivalent: ""))
         let focusTimerMenuItem = makeFocusTimerMenuItem()
         menu.addItem(focusTimerMenuItem)
         self.focusTimerMenuItem = focusTimerMenuItem
@@ -183,7 +176,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         pauseEventsItem?.title = eventPreferences.isPaused ? "Resume Events" : "Pause Events"
         pauseEventsItem?.state = eventPreferences.isPaused ? .on : .off
-        launchAtLoginItem?.state = launchAtLoginController.isEnabled ? .on : .off
 
         let currentSource = eventRouter?.snapshot.currentSource
         muteCurrentSourceItem?.title = currentSource.map { "Mute \($0)" } ?? "Mute Current Source"
@@ -204,10 +196,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openPetFolder() {
         NSWorkspace.shared.open(AppStorage.petsDirectory)
-    }
-
-    @objc private func moveToNextDisplay() {
-        petWindow?.moveToNextScreen()
     }
 
     @objc private func previewPetState(_ sender: NSMenuItem) {
@@ -303,14 +291,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func unmuteAllSources() {
         eventPreferences.mutedSources = []
         saveEventPreferences()
-    }
-
-    @objc private func toggleLaunchAtLogin() {
-        do {
-            try launchAtLoginController.setEnabled(!launchAtLoginController.isEnabled)
-        } catch {
-            showError(title: "Launch at Login could not be changed", error: error)
-        }
     }
 
     @objc private func quit() {
