@@ -260,7 +260,7 @@ final class PetWindowContentView: NSView {
     }
 
     private let petView: PetSpriteView
-    private let threadBadgeButton = NSButton()
+    private let threadBadgeButton = ThreadBadgeGlassButton()
     private let threadPanelView = NSView()
     private let threadPanelContentView = NSView()
     private let threadStackView = NSStackView()
@@ -521,28 +521,17 @@ final class PetWindowContentView: NSView {
     private func configureThreadBadgeButton() {
         addSubview(threadBadgeButton)
         threadBadgeButton.translatesAutoresizingMaskIntoConstraints = false
-        threadBadgeButton.target = self
-        threadBadgeButton.action = #selector(toggleThreadPanel)
-        threadBadgeButton.isBordered = true
-        threadBadgeButton.bezelStyle = .glass
-        threadBadgeButton.controlSize = .small
-        threadBadgeButton.focusRingType = .none
-        threadBadgeButton.contentTintColor = .labelColor
-        threadBadgeButton.imagePosition = .imageOnly
-        threadBadgeButton.setButtonType(.momentaryPushIn)
+        threadBadgeButton.onPress = { [weak self] in
+            self?.toggleThreadPanel()
+        }
     }
 
     private func configureThreadPanel() {
         addSubview(threadPanelView)
         threadPanelView.translatesAutoresizingMaskIntoConstraints = false
-        threadPanelView.wantsLayer = true
-        threadPanelView.layer?.backgroundColor = NSColor.clear.cgColor
         threadPanelView.addSubview(threadPanelContentView)
 
         threadPanelContentView.translatesAutoresizingMaskIntoConstraints = false
-        threadPanelContentView.wantsLayer = true
-        threadPanelContentView.layer?.backgroundColor = NSColor.clear.cgColor
-        threadPanelContentView.layer?.masksToBounds = true
 
         threadPanelContentView.addSubview(threadStackView)
         threadStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -637,28 +626,7 @@ final class PetWindowContentView: NSView {
 
     private func updateThreadBadge() {
         let count = threadSnapshot?.activeEventCount ?? 0
-        threadBadgeButton.isHidden = count == 0
-
-        if isThreadPanelExpanded {
-            threadBadgeButton.title = ""
-            threadBadgeButton.attributedTitle = NSAttributedString(string: "")
-            threadBadgeButton.image = NSImage(
-                systemSymbolName: "chevron.down",
-                accessibilityDescription: "Hide thread details"
-            )
-            threadBadgeButton.imagePosition = .imageOnly
-            threadBadgeButton.imageScaling = .scaleProportionallyDown
-        } else {
-            threadBadgeButton.image = nil
-            threadBadgeButton.imagePosition = .noImage
-            threadBadgeButton.attributedTitle = NSAttributedString(
-                string: "\(count)",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
-                    .foregroundColor: NSColor.labelColor
-                ]
-            )
-        }
+        threadBadgeButton.update(count: count, isExpanded: isThreadPanelExpanded)
     }
 
     private func rebuildThreadPanel() {
@@ -940,6 +908,132 @@ private final class FlashMessageRowView: NSView {
     }
 }
 
+private enum ThreadGlassStyle {
+    @MainActor static var tintColor: NSColor {
+        NSColor.controlAccentColor.withAlphaComponent(0.10)
+    }
+
+    @MainActor static func configureBadge(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
+        glassView.style = .regular
+        glassView.cornerRadius = cornerRadius
+        glassView.tintColor = tintColor
+    }
+
+    @MainActor static func configurePanelRow(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
+        glassView.style = .clear
+        glassView.cornerRadius = cornerRadius
+        glassView.tintColor = nil
+    }
+}
+
+private final class PassthroughGlassEffectView: NSGlassEffectView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let hitView = super.hitTest(point) else {
+            return nil
+        }
+
+        if hitView.isDescendant(ofType: NSButton.self) {
+            return hitView
+        }
+
+        return nil
+    }
+}
+
+private final class ThreadBadgeGlassButton: NSView {
+    private static let cornerRadius: CGFloat = 10
+    private static let iconSize: CGFloat = 14
+
+    var onPress: (() -> Void)?
+
+    private let glassView = PassthroughGlassEffectView()
+    private let contentView = NSView()
+    private let imageView = NSImageView()
+    private let textField = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        onPress?()
+    }
+
+    func update(count: Int, isExpanded: Bool) {
+        isHidden = count == 0
+
+        if isExpanded {
+            textField.isHidden = true
+            imageView.isHidden = false
+            imageView.image = NSImage(
+                systemSymbolName: "chevron.down",
+                accessibilityDescription: "Hide thread details"
+            )
+            toolTip = "Hide thread details"
+        } else {
+            imageView.isHidden = true
+            textField.isHidden = false
+            textField.stringValue = "\(count)"
+            toolTip = "\(count) active thread\(count == 1 ? "" : "s")"
+        }
+    }
+
+    private func setupView() {
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+
+        addSubview(glassView)
+        glassView.translatesAutoresizingMaskIntoConstraints = false
+        ThreadGlassStyle.configureBadge(glassView, cornerRadius: Self.cornerRadius)
+        glassView.contentView = contentView
+
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+
+        contentView.addSubview(imageView)
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentTintColor = .labelColor
+        imageView.imageScaling = .scaleProportionallyDown
+
+        contentView.addSubview(textField)
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.alignment = .center
+        textField.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        textField.textColor = .labelColor
+
+        NSLayoutConstraint.activate([
+            glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glassView.topAnchor.constraint(equalTo: topAnchor),
+            glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            contentView.leadingAnchor.constraint(equalTo: glassView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: glassView.trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: glassView.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
+
+            imageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            imageView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            imageView.widthAnchor.constraint(equalToConstant: Self.iconSize),
+            imageView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+
+            textField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            textField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            textField.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+        ])
+    }
+}
+
 private final class ThreadMessageRowView: NSView {
     private static let cornerRadius: CGFloat = 16
     private static let statusBadgeSize: CGFloat = 30
@@ -950,8 +1044,8 @@ private final class ThreadMessageRowView: NSView {
     private let thread: PetThreadSnapshot
     private let onOpen: (PetThreadSnapshot) -> Void
     private let onDismiss: (PetThreadSnapshot) -> Void
-    private let glassView = NSGlassEffectView()
-    private let contentView = NSView()
+    private let glassView: PassthroughGlassEffectView
+    private let contentView = ThreadRowContentView()
     private let statusBadgeView: ThreadStatusBadgeView
     private let textView: ThreadMessageTextView
     private let closeButton = NSButton()
@@ -965,6 +1059,7 @@ private final class ThreadMessageRowView: NSView {
         self.thread = thread
         self.onOpen = onOpen
         self.onDismiss = onDismiss
+        self.glassView = PassthroughGlassEffectView()
         self.statusBadgeView = ThreadStatusBadgeView(status: thread.status)
         self.textView = ThreadMessageTextView(thread: thread)
         super.init(frame: .zero)
@@ -1018,24 +1113,13 @@ private final class ThreadMessageRowView: NSView {
 
     private func setupView() {
         translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.clear.cgColor
 
         addSubview(glassView)
         glassView.translatesAutoresizingMaskIntoConstraints = false
-        glassView.style = .regular
-        glassView.cornerRadius = Self.cornerRadius
-        glassView.clipsToBounds = true
-        glassView.tintColor = NSColor.black.withAlphaComponent(0.84)
+        ThreadGlassStyle.configurePanelRow(glassView, cornerRadius: Self.cornerRadius)
         glassView.contentView = contentView
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.76).cgColor
-        contentView.layer?.cornerRadius = Self.cornerRadius
-        contentView.layer?.borderWidth = 1
-        contentView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
-        contentView.layer?.masksToBounds = true
 
         contentView.addSubview(statusBadgeView)
         statusBadgeView.translatesAutoresizingMaskIntoConstraints = false
@@ -1043,7 +1127,7 @@ private final class ThreadMessageRowView: NSView {
         contentView.addSubview(textView)
         textView.translatesAutoresizingMaskIntoConstraints = false
 
-        addSubview(closeButton)
+        contentView.addSubview(closeButton)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.isHidden = true
         closeButton.isBordered = false
@@ -1053,7 +1137,7 @@ private final class ThreadMessageRowView: NSView {
         )
         closeButton.imagePosition = .imageOnly
         closeButton.imageScaling = .scaleProportionallyDown
-        closeButton.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+        closeButton.contentTintColor = NSColor.secondaryLabelColor
         closeButton.target = self
         closeButton.action = #selector(dismissNotification)
         closeButton.setButtonType(.momentaryPushIn)
@@ -1069,8 +1153,8 @@ private final class ThreadMessageRowView: NSView {
             contentView.topAnchor.constraint(equalTo: glassView.topAnchor),
             contentView.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
 
-            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            closeButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            closeButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             closeButton.widthAnchor.constraint(equalToConstant: Self.closeButtonSize),
             closeButton.heightAnchor.constraint(equalToConstant: Self.closeButtonSize),
 
@@ -1088,6 +1172,33 @@ private final class ThreadMessageRowView: NSView {
 
     @objc private func dismissNotification() {
         onDismiss(thread)
+    }
+}
+
+private final class ThreadRowContentView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let hitView = super.hitTest(point) else {
+            return nil
+        }
+
+        if hitView.isDescendant(ofType: NSButton.self) {
+            return hitView
+        }
+
+        return nil
+    }
+}
+
+private extension NSView {
+    func isDescendant<T: NSView>(ofType type: T.Type) -> Bool {
+        var view: NSView? = self
+        while let currentView = view {
+            if currentView is T {
+                return true
+            }
+            view = currentView.superview
+        }
+        return false
     }
 }
 
@@ -1215,7 +1326,7 @@ private final class ThreadMessageTextView: NSView {
         paragraphStyle.lineBreakMode = .byTruncatingTail
         return [
             .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
-            .foregroundColor: NSColor.white,
+            .foregroundColor: NSColor.labelColor,
             .paragraphStyle: paragraphStyle
         ]
     }
@@ -1226,7 +1337,7 @@ private final class ThreadMessageTextView: NSView {
         paragraphStyle.lineBreakMode = .byWordWrapping
         return [
             .font: NSFont.systemFont(ofSize: 13, weight: .regular),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.82),
+            .foregroundColor: NSColor.secondaryLabelColor,
             .paragraphStyle: paragraphStyle
         ]
     }
