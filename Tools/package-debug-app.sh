@@ -20,7 +20,6 @@ mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 cp "$EXECUTABLE" "$APP_PATH/Contents/MacOS/GlobalPetAssistant"
 
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
-  cp -R "$RESOURCE_BUNDLE" "$APP_PATH/GlobalPetAssistant_GlobalPetAssistant.bundle"
   cp -R "$RESOURCE_BUNDLE" "$APP_PATH/Contents/Resources/GlobalPetAssistant_GlobalPetAssistant.bundle"
 fi
 

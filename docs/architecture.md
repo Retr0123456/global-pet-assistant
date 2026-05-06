@@ -65,7 +65,8 @@ Rows:
 | 7 | running | 0-5 |
 | 8 | review | 0-5 |
 
-Custom pet packages should live in this app's own directory to avoid writing into Codex App state:
+Custom pet packages should live in this app's own directory to avoid reading from
+or writing into Codex App state at runtime:
 
 ```text
 ~/.global-pet-assistant/pets/<pet-name>/
@@ -84,7 +85,10 @@ Recommended manifest:
 }
 ```
 
-The app includes `petctl import-codex-pet <name>` to copy compatible local pets from `~/.codex/pets`.
+The app includes `petctl import-pet <name>` to copy compatible local pets from
+configured import source directories into the app-owned directory. The default
+source is `~/.codex/pets`, and `petctl import-codex-pet <name>` remains a
+compatibility alias.
 
 ## Event API
 
@@ -223,4 +227,4 @@ The first version should prioritize the generic API and `petctl`. Specific adapt
 - Keep the renderer independent from event sources.
 - Keep the event protocol independent from the selected pet.
 - Store app-owned state under `~/.global-pet-assistant`.
-- Treat Codex pet support as a compatible import/rendering format, not as a dependency on Codex App.
+- Treat Codex pet support as a compatible import/rendering format, not as a runtime dependency on Codex App.

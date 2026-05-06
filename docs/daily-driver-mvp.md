@@ -147,7 +147,7 @@ Concrete first `open_folder` target:
 - Open the current project workspace in Finder:
 
 ```text
-$HOME/codespace/global-pet-assistant
+<repo>/global-pet-assistant
 ```
 
 Concrete second `open_folder` target:
@@ -193,7 +193,7 @@ swift run petctl notify \
   --level warning \
   --title "Open project folder" \
   --message "Click the pet to open the workspace" \
-  --action-folder "$HOME/codespace/global-pet-assistant" \
+  --action-folder "$PWD" \
   --ttl-ms 60000
 ```
 
@@ -208,16 +208,17 @@ Acceptance:
 
 What to do:
 
-- Load pets from the app-owned directory before checking `~/.codex/pets`.
+- Load pets from the app-owned directory.
 - Add a CLI command to open the app pet folder.
-- Add an importer from the current Codex pet folder.
+- Add an importer from configured source directories, defaulting to `~/.codex/pets`.
+- Install the bundled placeholder into the app-owned directory so first launch does not depend on Codex state.
 
 Concrete first pet import:
 
-- Import the existing Codex pet:
+- Import an existing compatible pet:
 
 ```text
-$HOME/.codex/pets/<name>
+<configured-source>/<name>
 ```
 
 - Destination:
@@ -230,22 +231,21 @@ How to do it:
 
 - Update `PetPackage` loading order:
   1. first compatible pet in `~/.global-pet-assistant/pets`
-  2. first compatible pet in `~/.codex/pets`
-  3. bundled placeholder
+  2. app-owned placeholder installed from the bundled resource
 - Add `petctl open-folder` to open:
 
 ```text
 $HOME/.global-pet-assistant/pets
 ```
 
-- Add `petctl import-codex-pet <name>` or a small `Tools/import-codex-pet.sh <name>`.
-- Copy `pet.json` and `spritesheet.*`; do not symlink for the first version.
+- Add `petctl import-pet <name>` with `petctl import-codex-pet <name>` as a compatibility alias.
+- Validate `pet.json` and the `1536x1872` atlas, then copy `pet.json` and the spritesheet; do not symlink for the first version.
 
 Verification:
 
 ```bash
 swift run petctl open-folder
-swift run petctl import-codex-pet <name>
+swift run petctl import-pet <name>
 find ~/.global-pet-assistant/pets/<name> -maxdepth 1 -type f
 swift run GlobalPetAssistant
 ```
@@ -253,8 +253,8 @@ swift run GlobalPetAssistant
 Acceptance:
 
 - The imported pet loads from `~/.global-pet-assistant/pets/<name>`.
-- If the app-owned pet is removed, the app still falls back to a compatible package under `~/.codex/pets`.
-- If both are unavailable, the bundled placeholder still loads.
+- If no app-owned pet exists, the app installs and loads the bundled placeholder.
+- External pet packages are only read during explicit import.
 
 ## Priority 5: Daily-use macOS Polish
 

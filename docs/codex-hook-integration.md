@@ -54,8 +54,7 @@ codex_hooks = true
 ```
 
 Restart Codex sessions after installing. User-level hooks are the recommended
-setup when you launch Codex from sibling directories such as
-`~/codespace/global-pet-assistant` and `~/codespace`.
+setup when you launch Codex from multiple working directories.
 
 For repo-local testing only, copy the opt-in examples into a local `.codex/`
 directory:

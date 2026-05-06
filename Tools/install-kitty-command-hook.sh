@@ -5,12 +5,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_HOOK="$ROOT_DIR/examples/hooks/kitty-command-flash.zsh"
 HOOK_DIR="$HOME/.global-pet-assistant/hooks"
 INSTALLED_HOOK="$HOOK_DIR/kitty-command-flash.zsh"
+INSTALLED_ENV="$HOOK_DIR/kitty-command-flash.env.zsh"
 ZSHRC="$HOME/.zshrc"
 MARKER_BEGIN="# >>> global-pet-assistant kitty command flash >>>"
 MARKER_END="# <<< global-pet-assistant kitty command flash <<<"
 
 mkdir -p "$HOOK_DIR"
 cp "$SOURCE_HOOK" "$INSTALLED_HOOK"
+printf 'GPA_KITTY_COMMAND_FLASH_PETCTL=%q\n' "swift run --package-path $ROOT_DIR petctl" > "$INSTALLED_ENV"
 
 if [[ ! -f "$ZSHRC" ]]; then
   touch "$ZSHRC"
@@ -30,4 +32,5 @@ else
 fi
 
 echo "Installed $INSTALLED_HOOK"
+echo "Installed $INSTALLED_ENV"
 echo "Open a new kitty tab/window, or run: source ~/.zshrc"

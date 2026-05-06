@@ -12,7 +12,7 @@ The project goal is to separate the pet into two layers:
 - Public source beta for macOS 26 and the AppKit Liquid Glass SDK.
 - No notarized downloadable release is published yet; build from source or package a local beta from this checkout.
 - The event API is local-only. Mutating writes require a bearer token generated on first app launch.
-- Pet art is intentionally not bundled beyond the generated placeholder. Users can import compatible local pet packages.
+- A generated placeholder pet is bundled and installed into the app-owned pet folder on first launch. Users can import compatible local pet packages.
 
 ## Goals
 
@@ -70,7 +70,7 @@ The repository currently starts with a Swift Package executable instead of an Xc
 - Renderer shape: Core Animation layer playback from a Codex-compatible atlas, with Liquid Glass AppKit controls for notification surfaces
 - Bundled test pet: `Sources/GlobalPetAssistant/Resources/SamplePets/placeholder`
 - App icon: original generated image under `Assets/AppIcon`
-- Startup pet loading: first compatible pet in `~/.global-pet-assistant/pets`, then `~/.codex/pets`, then bundled placeholder fallback
+- Startup pet loading: first compatible pet in `~/.global-pet-assistant/pets`; the bundled placeholder is installed there on first launch as a fallback
 - App-owned state root: `~/.global-pet-assistant`
 - Event safety: localhost-only HTTP, request size limits, source-level rate limiting, source action allowlisting, and conservative click-action validation
 
@@ -153,7 +153,7 @@ Source-level rate limits are in memory and reset when the app restarts:
 
 `GET /healthz` and `clear` events are exempt. A limited source receives HTTP `429` with JSON error `rate_limited` and `retryAfterMs`.
 
-Action allowlisting is loaded from `~/.global-pet-assistant/config.json`. The app writes a default config on first launch. If that file becomes invalid JSON or no longer matches the schema, the app backs it up as `config.invalid-<timestamp>.json` and regenerates defaults. Unknown sources can still update pet state, but events with actions are rejected with HTTP `403` and JSON error `action_not_allowed`.
+Action allowlisting and pet import source directories are loaded from `~/.global-pet-assistant/config.json`. The app writes a default config on first launch. If that file becomes invalid JSON or no longer matches the schema, the app backs it up as `config.invalid-<timestamp>.json` and regenerates defaults. Unknown sources can still update pet state, but events with actions are rejected with HTTP `403` and JSON error `action_not_allowed`.
 
 Hook examples live under `examples/hooks/`:
 
@@ -245,11 +245,17 @@ Pet package commands:
 ```bash
 swift run petctl open-folder
 swift run petctl open-logs
+swift run petctl import-pet <name>
 swift run petctl import-codex-pet <name>
 find ~/.global-pet-assistant/pets/<name> -maxdepth 1 -type f
 ```
 
-The importer copies `pet.json` and the manifest's referenced spritesheet into the app-owned pet folder. It does not symlink into Codex state.
+The importer searches `petImportSourceDirectories` from
+`~/.global-pet-assistant/config.json`, which defaults to `~/.codex/pets`.
+It validates `pet.json`, requires a safe manifest-local spritesheet filename, checks
+that the atlas is `1536x1872`, and then copies the package into the app-owned pet
+folder. It does not symlink into Codex state. `import-codex-pet` is kept as a
+compatibility alias for `import-pet`.
 
 Pet packages are not open-sourced by default. The app can render
 Codex-compatible pet packages directly, but third-party pet spritesheets or
@@ -362,7 +368,7 @@ Global Pet Assistant stores local state in `~/.global-pet-assistant`:
 
 | Path | Purpose |
 | --- | --- |
-| `config.json` | Source action allowlist. |
+| `config.json` | Source action allowlist and pet import source directories. |
 | `event-preferences.json` | Pause and muted-source preferences. |
 | `window-origin.json` | Saved pet position. |
 | `pets/` | App-owned imported pet packages. |

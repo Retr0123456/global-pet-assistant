@@ -7,7 +7,9 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
-- No unreleased changes yet.
+- Installed the bundled placeholder pet into the app-owned pet directory on first launch so fresh installs no longer depend on Codex pet state.
+- Changed external pet loading to an explicit `petctl import-pet` flow backed by configurable `petImportSourceDirectories`.
+- Removed source hardcoding from the kitty command hook example and aligned release resource bundle layout with SwiftPM's runtime lookup path.
 
 ## 0.3.2 - 2026-05-05
 

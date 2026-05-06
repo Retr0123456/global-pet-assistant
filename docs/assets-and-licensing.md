@@ -32,24 +32,29 @@ Pet packages are not included in the repository license by default. Do not
 commit third-party pet spritesheets or character art unless the asset's license
 explicitly allows redistribution and that license is documented here.
 
-Global Pet Assistant can render Codex-compatible pet packages directly. Users
+Global Pet Assistant renders pet packages from its own app-owned directory. Users
 can place compatible packages in:
 
 ```text
 ~/.global-pet-assistant/pets/<pet-name>/
 ```
 
-or import an already installed local Codex pet with:
+or import a compatible package from a configured source directory with:
 
 ```bash
-swift run petctl import-codex-pet <name>
+swift run petctl import-pet <name>
 ```
 
-The importer copies the local package into the app-owned pet folder. It does not
-grant redistribution rights for that asset.
+`~/.global-pet-assistant/config.json` contains `petImportSourceDirectories`,
+which defaults to `~/.codex/pets`. The importer validates the manifest and atlas
+dimensions before copying the local package into the app-owned pet folder. It
+does not grant redistribution rights for that asset. `import-codex-pet` remains a
+compatibility alias.
 
 ## Bundled Placeholder
 
 `Sources/GlobalPetAssistant/Resources/SamplePets/placeholder/spritesheet.png`
 is a deterministic generated placeholder used for testing and fallback
-rendering. It is safe to redistribute with the source code.
+rendering. The app installs it into `~/.global-pet-assistant/pets/placeholder`
+on first launch so new users see a pet without relying on Codex state. It is
+safe to redistribute with the source code.

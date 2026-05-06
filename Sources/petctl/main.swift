@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 struct PetctlAction: Encodable {
     var type: String
@@ -36,7 +37,21 @@ enum PetctlCommand {
     case run(PetctlRunRequest)
     case openFolder
     case openLogs
-    case importCodexPet(String)
+    case importPet(String)
+}
+
+private struct PetImportManifest: Decodable {
+    var id: String
+    var displayName: String
+    var description: String
+    var spritesheetPath: String
+}
+
+private struct PetImportPackage {
+    var sourceDirectory: URL
+    var manifestURL: URL
+    var spritesheetURL: URL
+    var spritesheetPath: String
 }
 
 enum PetctlError: Error, CustomStringConvertible {
@@ -89,6 +104,7 @@ Usage:
   petctl clear [--source codex-cli] [--timeout 5]
   petctl open-folder
   petctl open-logs
+  petctl import-pet <name>
   petctl import-codex-pet <name>
 
 Commands:
@@ -99,7 +115,8 @@ Commands:
   clear             Clear active events and return the pet to idle.
   open-folder       Open ~/.global-pet-assistant/pets in Finder.
   open-logs         Open ~/.global-pet-assistant/logs in Finder.
-  import-codex-pet  Copy pet.json and the referenced spritesheet from ~/.codex/pets/<name>.
+  import-pet        Validate and copy a pet from configured import source directories.
+  import-codex-pet  Compatibility alias for import-pet.
 """
 
 let arguments = Array(CommandLine.arguments.dropFirst())
@@ -217,12 +234,12 @@ private func parse(_ arguments: [String]) throws -> PetctlCommand {
         }
 
         return .openLogs
-    case "import-codex-pet":
+    case "import-pet", "import-codex-pet":
         guard arguments.count == 2 else {
-            throw PetctlError.usage("Usage: petctl import-codex-pet <name>.")
+            throw PetctlError.usage("Usage: petctl import-pet <name>.")
         }
 
-        return .importCodexPet(arguments[1])
+        return .importPet(arguments[1])
     case "help", "--help", "-h":
         print(usage)
         exit(0)
@@ -241,8 +258,8 @@ private func run(_ command: PetctlCommand) throws {
         try openPetFolder()
     case .openLogs:
         try openLogsFolder()
-    case .importCodexPet(let name):
-        try importCodexPet(named: name)
+    case .importPet(let name):
+        try importPet(named: name)
     }
 }
 
@@ -409,33 +426,25 @@ private func openLogsFolder() throws {
     }
 }
 
-private func importCodexPet(named name: String) throws {
+private func importPet(named name: String) throws {
     let safeName = try validatedPetName(name)
-    let sourceDirectory = codexPetsDirectoryURL().appendingPathComponent(safeName, isDirectory: true)
+    let package = try findImportPackage(named: safeName)
     let destinationDirectory = appPetsDirectoryURL().appendingPathComponent(safeName, isDirectory: true)
-    let sourceManifestURL = sourceDirectory.appendingPathComponent("pet.json")
-    let manifestData = try Data(contentsOf: sourceManifestURL)
-    let spritesheetPath = try spritesheetPath(fromManifestData: manifestData)
-    let sourceSpritesheetURL = sourceDirectory.appendingPathComponent(spritesheetPath)
-
-    guard FileManager.default.fileExists(atPath: sourceSpritesheetURL.path) else {
-        throw PetctlError.requestFailed("Missing source spritesheet: \(sourceSpritesheetURL.path).")
-    }
 
     try FileManager.default.createDirectory(
         at: destinationDirectory,
         withIntermediateDirectories: true
     )
     try replaceCopy(
-        from: sourceManifestURL,
+        from: package.manifestURL,
         to: destinationDirectory.appendingPathComponent("pet.json")
     )
     try replaceCopy(
-        from: sourceSpritesheetURL,
-        to: destinationDirectory.appendingPathComponent(spritesheetPath)
+        from: package.spritesheetURL,
+        to: destinationDirectory.appendingPathComponent(package.spritesheetPath)
     )
 
-    print("Imported \(safeName) to \(destinationDirectory.path)")
+    print("Imported \(safeName) from \(package.sourceDirectory.path) to \(destinationDirectory.path)")
 }
 
 private func validatedPetName(_ name: String) throws -> String {
@@ -451,10 +460,51 @@ private func validatedPetName(_ name: String) throws -> String {
     return name
 }
 
-private func spritesheetPath(fromManifestData data: Data) throws -> String {
+private func findImportPackage(named name: String) throws -> PetImportPackage {
+    let sourceDirectories = petImportSourceDirectoryURLs()
+    guard !sourceDirectories.isEmpty else {
+        throw PetctlError.requestFailed(
+            "No pet import source directories configured in \(appConfigurationURL().path)."
+        )
+    }
+
+    for sourceRoot in sourceDirectories {
+        let sourceDirectory = sourceRoot.appendingPathComponent(name, isDirectory: true)
+        let manifestURL = sourceDirectory.appendingPathComponent("pet.json")
+        guard FileManager.default.fileExists(atPath: manifestURL.path) else {
+            continue
+        }
+
+        return try validateImportPackage(in: sourceDirectory)
+    }
+
+    let searchedPaths = sourceDirectories.map(\.path).joined(separator: ", ")
+    throw PetctlError.requestFailed("Could not find pet '\(name)' in: \(searchedPaths).")
+}
+
+private func validateImportPackage(in sourceDirectory: URL) throws -> PetImportPackage {
+    let manifestURL = sourceDirectory.appendingPathComponent("pet.json")
+    let manifestData = try Data(contentsOf: manifestURL)
+    let manifest = try JSONDecoder().decode(PetImportManifest.self, from: manifestData)
+    let spritesheetPath = try validatedSpritesheetPath(manifest.spritesheetPath)
+    let spritesheetURL = sourceDirectory.appendingPathComponent(spritesheetPath)
+
+    guard FileManager.default.fileExists(atPath: spritesheetURL.path) else {
+        throw PetctlError.requestFailed("Missing source spritesheet: \(spritesheetURL.path).")
+    }
+
+    try validateAtlasImage(at: spritesheetURL)
+
+    return PetImportPackage(
+        sourceDirectory: sourceDirectory,
+        manifestURL: manifestURL,
+        spritesheetURL: spritesheetURL,
+        spritesheetPath: spritesheetPath
+    )
+}
+
+private func validatedSpritesheetPath(_ path: String) throws -> String {
     guard
-        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-        let path = object["spritesheetPath"] as? String,
         !path.isEmpty,
         !path.hasPrefix("/"),
         !path.contains(".."),
@@ -464,6 +514,22 @@ private func spritesheetPath(fromManifestData data: Data) throws -> String {
     }
 
     return path
+}
+
+private func validateAtlasImage(at url: URL) throws {
+    guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
+          let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+          let height = properties[kCGImagePropertyPixelHeight] as? NSNumber
+    else {
+        throw PetctlError.requestFailed("Could not read pet atlas image dimensions: \(url.path).")
+    }
+
+    guard width.intValue == 1536, height.intValue == 1872 else {
+        throw PetctlError.requestFailed(
+            "Invalid pet atlas dimensions for \(url.path): expected 1536x1872, got \(width.intValue)x\(height.intValue)."
+        )
+    }
 }
 
 private func replaceCopy(from sourceURL: URL, to destinationURL: URL) throws {
@@ -597,20 +663,17 @@ private final class ResponseBox: @unchecked Sendable {
 }
 
 private func appPetsDirectoryURL() -> URL {
-    FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".global-pet-assistant", isDirectory: true)
+    appRootDirectoryURL()
         .appendingPathComponent("pets", isDirectory: true)
 }
 
 private func logsDirectoryURL() -> URL {
-    FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".global-pet-assistant", isDirectory: true)
+    appRootDirectoryURL()
         .appendingPathComponent("logs", isDirectory: true)
 }
 
 private func appTokenURL() -> URL {
-    FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".global-pet-assistant", isDirectory: true)
+    appRootDirectoryURL()
         .appendingPathComponent("token")
 }
 
@@ -626,7 +689,63 @@ private func loadToken() throws -> String {
     return token
 }
 
-private func codexPetsDirectoryURL() -> URL {
+private func appConfigurationURL() -> URL {
+    appRootDirectoryURL()
+        .appendingPathComponent("config.json")
+}
+
+private func appRootDirectoryURL() -> URL {
+    if let root = ProcessInfo.processInfo.environment["GLOBAL_PET_ASSISTANT_HOME"],
+       !root.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return URL(fileURLWithPath: expandUserPath(root), isDirectory: true).standardizedFileURL
+    }
+
+    return FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".global-pet-assistant", isDirectory: true)
+}
+
+private func petImportSourceDirectoryURLs() -> [URL] {
+    let configuredPaths = configuredPetImportSourceDirectories()
+        ?? [defaultCodexPetsDirectoryURL().path]
+    var seen: Set<String> = []
+    return configuredPaths
+        .map(expandUserPath)
+        .map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+        .filter { url in
+            guard !seen.contains(url.path) else {
+                return false
+            }
+            seen.insert(url.path)
+            return true
+        }
+}
+
+private func configuredPetImportSourceDirectories() -> [String]? {
+    guard let data = try? Data(contentsOf: appConfigurationURL()),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let paths = object["petImportSourceDirectories"] as? [String]
+    else {
+        return nil
+    }
+
+    return paths
+}
+
+private func expandUserPath(_ path: String) -> String {
+    if path == "~" {
+        return FileManager.default.homeDirectoryForCurrentUser.path
+    }
+
+    if path.hasPrefix("~/") {
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(String(path.dropFirst(2)))
+            .path
+    }
+
+    return path
+}
+
+private func defaultCodexPetsDirectoryURL() -> URL {
     FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".codex", isDirectory: true)
         .appendingPathComponent("pets", isDirectory: true)

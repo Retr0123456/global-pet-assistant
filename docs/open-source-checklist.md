@@ -30,7 +30,7 @@ Use this checklist before making the repository public.
 - [x] Generated `AppIcon.iconset` is ignored.
 - [x] App icon generator uses local macOS tools and does not require the Swift toolchain.
 - [x] Do not commit third-party pet assets unless their redistribution license is documented.
-- [x] For Codex-compatible pet assets, document that users can import local copies with `petctl import-codex-pet <name>`.
+- [x] For Codex-compatible pet assets, document that users can import local copies with `petctl import-pet <name>`.
 
 ## Security Review
 

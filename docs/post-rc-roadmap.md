@@ -160,9 +160,9 @@ What to do:
 Commands to add:
 
 ```bash
-petctl install-hook local-build --repo $HOME/codespace/global-pet-assistant
-petctl install-hook codex --repo $HOME/codespace/global-pet-assistant
-petctl install-hook claude --repo $HOME/codespace/global-pet-assistant
+petctl install-hook local-build --repo <repo>
+petctl install-hook codex --repo <repo>
+petctl install-hook claude --repo <repo>
 ```
 
 Concrete first install output:

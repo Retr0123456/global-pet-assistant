@@ -2,6 +2,15 @@ import Foundation
 
 struct AppConfiguration: Codable, Equatable {
     var trustedSources: [String: SourceActionPolicy]
+    var petImportSourceDirectories: [String]
+
+    init(
+        trustedSources: [String: SourceActionPolicy],
+        petImportSourceDirectories: [String] = Self.defaultPetImportSourceDirectories()
+    ) {
+        self.trustedSources = trustedSources
+        self.petImportSourceDirectories = petImportSourceDirectories
+    }
 
     static var defaultConfiguration: AppConfiguration {
         let workspaceRoots = defaultWorkspaceRoots()
@@ -33,8 +42,23 @@ struct AppConfiguration: Codable, Equatable {
                     actions: ["open_url"],
                     urlHosts: ["github.com"]
                 )
-            ]
+            ],
+            petImportSourceDirectories: defaultPetImportSourceDirectories()
         )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case trustedSources
+        case petImportSourceDirectories
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        trustedSources = try container.decode([String: SourceActionPolicy].self, forKey: .trustedSources)
+        petImportSourceDirectories = try container.decodeIfPresent(
+            [String].self,
+            forKey: .petImportSourceDirectories
+        ) ?? []
     }
 
     func policy(for rawSource: String) -> SourceActionPolicy? {
@@ -59,6 +83,9 @@ struct AppConfiguration: Codable, Equatable {
             codexPolicy.actions.append(kittyAction)
             configuration.trustedSources[codexSource] = codexPolicy
         }
+        if configuration.petImportSourceDirectories.isEmpty {
+            configuration.petImportSourceDirectories = Self.defaultPetImportSourceDirectories()
+        }
 
         return configuration
     }
@@ -76,6 +103,16 @@ struct AppConfiguration: Codable, Equatable {
             home.appendingPathComponent("Documents", isDirectory: true)
         ]
         .map { $0.standardizedFileURL.path }
+    }
+
+    private static func defaultPetImportSourceDirectories() -> [String] {
+        [
+            FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".codex", isDirectory: true)
+                .appendingPathComponent("pets", isDirectory: true)
+                .standardizedFileURL
+                .path
+        ]
     }
 }
 

@@ -4,6 +4,15 @@ import Testing
 
 struct PetPackageTests {
     @Test
+    func testLoadsBundledPlaceholderPet() throws {
+        let package = try PetPackage.loadBundledSample()
+
+        #expect(package.id == "placeholder")
+        #expect(package.spritesheetURL.lastPathComponent == "spritesheet.png")
+        #expect(FileManager.default.fileExists(atPath: package.spritesheetURL.path))
+    }
+
+    @Test
     func testAcceptsCodexCompatiblePackageLayout() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

@@ -387,6 +387,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func loadDisplayPet() throws -> (PetPackage, PetAtlas) {
+        do {
+            try PetPackage.ensureBundledSampleInstalled()
+        } catch {
+            NSLog("GlobalPetAssistant could not install bundled placeholder pet: \(String(describing: error))")
+        }
+
         for package in PetPackage.loadInstalledPets() {
             do {
                 return (package, try PetAtlas(contentsOf: package.spritesheetURL))

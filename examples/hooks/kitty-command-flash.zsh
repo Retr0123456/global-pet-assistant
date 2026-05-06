@@ -9,13 +9,24 @@
 autoload -Uz add-zsh-hook
 zmodload zsh/datetime 2>/dev/null || return 0
 
+if [[ -r "$HOME/.global-pet-assistant/hooks/kitty-command-flash.env.zsh" ]]; then
+  source "$HOME/.global-pet-assistant/hooks/kitty-command-flash.env.zsh"
+fi
+
 : "${GPA_KITTY_COMMAND_FLASH_MIN_SUCCESS_MS:=5000}"
 : "${GPA_KITTY_COMMAND_FLASH_SOURCE:=kitty-command}"
 if [[ -z "${GPA_KITTY_COMMAND_FLASH_PETCTL:-}" ]]; then
-  if [[ -x "/Users/ryanchen/codespace/global-pet-assistant/.build/release/petctl" ]]; then
-    GPA_KITTY_COMMAND_FLASH_PETCTL="/Users/ryanchen/codespace/global-pet-assistant/.build/release/petctl"
+  if (( $+commands[petctl] )); then
+    GPA_KITTY_COMMAND_FLASH_PETCTL="petctl"
   else
-    GPA_KITTY_COMMAND_FLASH_PETCTL="swift run --package-path /Users/ryanchen/codespace/global-pet-assistant petctl"
+    __gpa_kitty_hook_path="${(%):-%x}"
+    __gpa_kitty_hook_dir="${__gpa_kitty_hook_path:A:h}"
+    __gpa_kitty_repo_root="${__gpa_kitty_hook_dir:h:h}"
+    if [[ -f "$__gpa_kitty_repo_root/Package.swift" ]]; then
+      GPA_KITTY_COMMAND_FLASH_PETCTL="swift run --package-path ${__gpa_kitty_repo_root:q} petctl"
+    else
+      GPA_KITTY_COMMAND_FLASH_PETCTL="swift run petctl"
+    fi
   fi
 fi
 

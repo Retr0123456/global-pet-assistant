@@ -6,7 +6,8 @@ Global Pet Assistant is local-first.
 - It does not send telemetry to a hosted service.
 - It stores app state and logs under `~/.global-pet-assistant`.
 - It stores the local event API bearer token at `~/.global-pet-assistant/token`.
-- It may read pet packages from `~/.global-pet-assistant/pets` and, as a compatibility fallback, `~/.codex/pets`.
+- At startup it reads pet packages from `~/.global-pet-assistant/pets`.
+- `petctl import-pet` may read from configured import source directories, which default to `~/.codex/pets`, only when explicitly invoked.
 
 Event senders can include titles, message previews, working directories, and
 click actions in local event payloads. Those values can appear in JSONL logs
