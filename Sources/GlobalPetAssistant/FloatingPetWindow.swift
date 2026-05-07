@@ -31,7 +31,7 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
-    var onThreadClick: ((PetThreadSnapshot) -> Void)? {
+    var onThreadClick: ((ThreadDisplayRow) -> Void)? {
         get {
             petContentView.onThreadClick
         }
@@ -40,7 +40,7 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
-    var onThreadDismiss: ((PetThreadSnapshot) -> Void)? {
+    var onThreadDismiss: ((ThreadDisplayRow) -> Void)? {
         get {
             petContentView.onThreadDismiss
         }
@@ -117,6 +117,10 @@ final class FloatingPetWindow: NSPanel {
 
     func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
         petContentView.updateThreadSnapshot(snapshot)
+    }
+
+    func updateThreadPanelSnapshot(_ snapshot: ThreadPanelSnapshot?) {
+        petContentView.updateThreadPanelSnapshot(snapshot)
     }
 
     func updateFocusTimerSnapshot(_ snapshot: FocusTimerSnapshot?) {
@@ -233,8 +237,8 @@ final class PetWindowContentView: NSView {
     var onClick: (() -> Void)?
     var onHoverChanged: ((Bool) -> Void)?
     var onDragChanged: ((PetDragDirection?) -> Void)?
-    var onThreadClick: ((PetThreadSnapshot) -> Void)?
-    var onThreadDismiss: ((PetThreadSnapshot) -> Void)?
+    var onThreadClick: ((ThreadDisplayRow) -> Void)?
+    var onThreadDismiss: ((ThreadDisplayRow) -> Void)?
     var onFocusTimerCancel: (() -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
@@ -277,7 +281,7 @@ final class PetWindowContentView: NSView {
     private let clickMovementThreshold: CGFloat = 5
     private let dragAnimationThreshold: CGFloat = 1.5
     private var hoverTrackingArea: NSTrackingArea?
-    private var threadSnapshot: EventRouterSnapshot?
+    private var threadSnapshot: ThreadPanelSnapshot?
     private var focusTimerSnapshot: FocusTimerSnapshot?
     private var isThreadPanelExpanded = false
     private var isFlashPlacedLeft = true
@@ -462,11 +466,18 @@ final class PetWindowContentView: NSView {
     }
 
     func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
+        updateThreadPanelSnapshot(ThreadPanelSnapshot(
+            genericThreads: snapshot?.activeThreads ?? [],
+            flashMessages: snapshot?.flashMessages ?? []
+        ))
+    }
+
+    func updateThreadPanelSnapshot(_ snapshot: ThreadPanelSnapshot?) {
         let previousSize = desiredContentSize
         threadSnapshot = snapshot
         updateFlashPlacement()
 
-        if snapshot?.activeEventCount ?? 0 == 0 {
+        if snapshot?.activeCount ?? 0 == 0 {
             isThreadPanelExpanded = false
         }
 
@@ -499,7 +510,7 @@ final class PetWindowContentView: NSView {
     }
 
     @objc private func toggleThreadPanel() {
-        guard threadSnapshot?.activeEventCount ?? 0 > 0 else {
+        guard threadSnapshot?.activeCount ?? 0 > 0 else {
             return
         }
 
@@ -625,7 +636,7 @@ final class PetWindowContentView: NSView {
     }
 
     private func updateThreadBadge() {
-        let count = threadSnapshot?.activeEventCount ?? 0
+        let count = threadSnapshot?.activeCount ?? 0
         threadBadgeButton.update(count: count, isExpanded: isThreadPanelExpanded)
     }
 
@@ -635,13 +646,13 @@ final class PetWindowContentView: NSView {
             view.removeFromSuperview()
         }
 
-        let threads = threadSnapshot?.activeThreads ?? []
+        let threads = threadSnapshot?.displayRows ?? []
         for thread in threads {
             threadStackView.addArrangedSubview(makeThreadRow(for: thread))
         }
     }
 
-    private func makeThreadRow(for thread: PetThreadSnapshot) -> NSView {
+    private func makeThreadRow(for thread: ThreadDisplayRow) -> NSView {
         let row = ThreadMessageRowView(
             thread: thread,
             onOpen: { [weak self] thread in
@@ -658,7 +669,7 @@ final class PetWindowContentView: NSView {
     }
 
     private func applyThreadPanelVisibility() {
-        threadPanelView.isHidden = !isThreadPanelExpanded || (threadSnapshot?.activeEventCount ?? 0) == 0
+        threadPanelView.isHidden = !isThreadPanelExpanded || (threadSnapshot?.activeCount ?? 0) == 0
     }
 
     private var currentThreadPanelHeight: CGFloat {
@@ -666,7 +677,7 @@ final class PetWindowContentView: NSView {
             return Self.threadPanelMinHeight
         }
 
-        let threadCount = max(threadSnapshot?.activeThreads.count ?? 0, 1)
+        let threadCount = max(threadSnapshot?.displayRows.count ?? 0, 1)
         let rowsHeight = CGFloat(threadCount) * Self.threadRowHeight
         let spacingHeight = CGFloat(max(threadCount - 1, 0)) * Self.threadStackSpacing
         let contentHeight = Self.threadPanelVerticalInset * 2 + rowsHeight + spacingHeight
@@ -1041,9 +1052,9 @@ private final class ThreadMessageRowView: NSView {
     private static let actionReserveWidth: CGFloat = 28
     private static let fixedHeight: CGFloat = 78
 
-    private let thread: PetThreadSnapshot
-    private let onOpen: (PetThreadSnapshot) -> Void
-    private let onDismiss: (PetThreadSnapshot) -> Void
+    private let thread: ThreadDisplayRow
+    private let onOpen: (ThreadDisplayRow) -> Void
+    private let onDismiss: (ThreadDisplayRow) -> Void
     private let glassView: PassthroughGlassEffectView
     private let contentView = ThreadRowContentView()
     private let statusBadgeView: ThreadStatusBadgeView
@@ -1052,9 +1063,9 @@ private final class ThreadMessageRowView: NSView {
     private var hoverTrackingArea: NSTrackingArea?
 
     init(
-        thread: PetThreadSnapshot,
-        onOpen: @escaping (PetThreadSnapshot) -> Void,
-        onDismiss: @escaping (PetThreadSnapshot) -> Void
+        thread: ThreadDisplayRow,
+        onOpen: @escaping (ThreadDisplayRow) -> Void,
+        onDismiss: @escaping (ThreadDisplayRow) -> Void
     ) {
         self.thread = thread
         self.onOpen = onOpen
@@ -1271,7 +1282,7 @@ private final class ThreadMessageTextView: NSView {
     private let directoryName: String
     private let messagePreview: String
 
-    init(thread: PetThreadSnapshot) {
+    init(thread: ThreadDisplayRow) {
         self.directoryName = thread.directoryName
         self.messagePreview = thread.messagePreview
         super.init(frame: .zero)

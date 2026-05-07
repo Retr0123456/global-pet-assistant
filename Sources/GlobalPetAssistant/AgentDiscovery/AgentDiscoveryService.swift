@@ -33,6 +33,11 @@ final class AgentDiscoveryService {
         registry.snapshot
     }
 
+    func archiveSession(id: String) {
+        registry.archive(id: id)
+        onSnapshotChange?(registry.snapshot)
+    }
+
     func startHookSocket() {
         guard hookSocketServer == nil else {
             return

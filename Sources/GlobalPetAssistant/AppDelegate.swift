@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var appConfiguration = AppConfiguration.defaultConfiguration
     private var authorizationToken = ""
     private var currentPetPackage: PetPackage?
+    private var latestEventRouterSnapshot: EventRouterSnapshot?
+    private var latestAgentRegistrySnapshot = AgentRegistrySnapshot(sessions: [])
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -44,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 _ = self?.performAction(thread.action, source: thread.source)
             }
             window.onThreadDismiss = { [weak self] thread in
-                self?.eventRouter?.clearSource(thread.source)
+                self?.dismissThread(thread)
             }
             window.onFocusTimerCancel = { [weak self] in
                 self?.cancelFocusTimer()
@@ -155,10 +157,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.petBehaviorController?.setBaseState(state)
             },
             onSnapshotChange: { [weak self] snapshot in
-                self?.petWindow?.updateThreadSnapshot(snapshot)
+                self?.latestEventRouterSnapshot = snapshot
+                self?.updateThreadPanelSnapshot()
             }
         )
-        petWindow?.updateThreadSnapshot(eventRouter?.snapshot)
+        latestEventRouterSnapshot = eventRouter?.snapshot
+        updateThreadPanelSnapshot()
     }
 
     private func startEventServer() {
@@ -184,12 +188,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func startAgentDiscoveryService() {
         let service = AgentDiscoveryService(
+            onSnapshotChange: { [weak self] snapshot in
+                self?.latestAgentRegistrySnapshot = snapshot
+                self?.updateThreadPanelSnapshot()
+            },
             onProjectedEvent: { [weak self] event in
                 _ = self?.acceptEvent(event)
             }
         )
         service.startHookSocket()
         agentDiscoveryService = service
+    }
+
+    private func updateThreadPanelSnapshot() {
+        let panelSnapshot = ThreadPanelSnapshot(
+            genericThreads: latestEventRouterSnapshot?.activeThreads ?? [],
+            agentThreads: AgentThreadProjection.snapshots(from: latestAgentRegistrySnapshot),
+            flashMessages: latestEventRouterSnapshot?.flashMessages ?? []
+        )
+        petWindow?.updateThreadPanelSnapshot(panelSnapshot)
+    }
+
+    private func dismissThread(_ thread: ThreadDisplayRow) {
+        switch thread.kind {
+        case .generic:
+            eventRouter?.clearSource(thread.source)
+        case .agent:
+            agentDiscoveryService?.archiveSession(id: thread.id)
+        }
     }
 
     func menuWillOpen(_ menu: NSMenu) {
