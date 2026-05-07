@@ -183,7 +183,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startAgentDiscoveryService() {
-        let service = AgentDiscoveryService()
+        let service = AgentDiscoveryService(
+            onProjectedEvent: { [weak self] event in
+                _ = self?.acceptEvent(event)
+            }
+        )
         service.startHookSocket()
         agentDiscoveryService = service
     }
