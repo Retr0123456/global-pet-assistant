@@ -19,9 +19,16 @@ let package = Package(
         .executable(
             name: "pet-webhook-bridge",
             targets: ["petWebhookBridge"]
+        ),
+        .executable(
+            name: "global-pet-agent-bridge",
+            targets: ["globalPetAgentBridge"]
         )
     ],
     targets: [
+        .target(
+            name: "GlobalPetAgentBridgeCore"
+        ),
         .target(
             name: "PetWebhookBridgeCore"
         ),
@@ -38,10 +45,15 @@ let package = Package(
             name: "petWebhookBridge",
             dependencies: ["PetWebhookBridgeCore"]
         ),
+        .executableTarget(
+            name: "globalPetAgentBridge",
+            dependencies: ["GlobalPetAgentBridgeCore"]
+        ),
         .testTarget(
             name: "GlobalPetAssistantTests",
             dependencies: [
                 "GlobalPetAssistant",
+                "GlobalPetAgentBridgeCore",
                 "PetWebhookBridgeCore"
             ],
             swiftSettings: [
