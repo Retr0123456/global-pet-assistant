@@ -1,6 +1,6 @@
 # Codex Hook Integration
 
-This repository includes opt-in Codex hook examples that forward Codex lifecycle events to the local pet event API at `http://127.0.0.1:17321/events`.
+This repository includes opt-in Codex hook support that forwards Codex lifecycle events to the local pet through the agent hook bridge and Unix socket.
 
 ## Official Codex Surface
 
@@ -15,25 +15,34 @@ Codex loads hooks from `hooks.json` or inline `[hooks]` tables next to active co
 
 The public checkout keeps hook templates under `examples/codex-hooks/` instead of shipping an active `.codex/` layer. Codex only loads project-local hooks after you copy the examples into `.codex/` and trust that config layer.
 
-## Event Mapping
+## Event Flow
 
-The hook script is `examples/codex-hooks/hooks/codex-pet-event.py`. It reads the Codex hook JSON object from stdin, reads the local bearer token from `~/.global-pet-assistant/token` when present, and posts a `LocalPetEvent` JSON payload to the app.
+The managed hook command is `global-pet-agent-bridge --source codex`. The bridge is a short-lived process that reads Codex hook JSON from stdin, captures terminal environment such as `TTY`, `TERM_PROGRAM`, `TMUX_PANE`, and `KITTY_WINDOW_ID`, writes one newline-delimited `AgentHookEnvelope` to the app socket, and exits.
 
-| Codex hook | Pet event | Pet state | Purpose |
-| --- | --- | --- | --- |
-| `SessionStart` | `codex.session.start` | `running` | Conversation/session opened or resumed. |
-| `UserPromptSubmit` | `codex.turn.running` | `running` | User submitted a prompt and Codex started work. |
-| `PermissionRequest` | `codex.permission.request` | `waiting` via warning level | Codex is waiting for approval of a command or permission request. |
-| `Stop` | `codex.turn.review` | `review` via success level | Codex finished the turn and the result is ready for review. |
+Default socket:
 
-The source is `codex-cli:<stable-session-key>` and the dedupe key is `codex:<session_id>`, so repeated lifecycle events for the same Codex thread update one active pet thread instead of creating duplicates. The stable session key includes a hash of the full Codex session id instead of a short prefix, which keeps multiple Codex sessions distinct even when their time-sorted ids share the same prefix. The hook sends Codex's current working directory as a separate `cwd` field; the pet UI uses its last path component as the message area's directory label.
-
-When Codex runs inside kitty and the hook inherits `KITTY_WINDOW_ID` plus `KITTY_LISTEN_ON`, the hook also attaches a `focus_kitty_window` action. Clicking the message area asks kitty to focus the matching window id, which also switches to the containing kitty tab. This requires kitty remote control over a socket, for example:
-
-```conf
-allow_remote_control socket-only
-listen_on unix:/tmp/global-pet-kitty.sock
+```text
+~/.global-pet-assistant/run/agent-hooks.sock
 ```
+
+Override socket:
+
+```bash
+export GLOBAL_PET_AGENT_SOCKET=/path/to/agent-hooks.sock
+```
+
+The app receives envelopes through `AgentHookSocketServer`, sends Codex envelopes to `CodexProvider`, stores durable sessions in `AgentRegistry`, and projects only minimal animation state back into `LocalPetEvent`. `LocalPetEvent.source` is not the canonical Codex session id.
+
+| Codex hook | Agent status | Purpose |
+| --- | --- | --- |
+| `SessionStart` | `started` | Conversation/session opened or resumed. |
+| `UserPromptSubmit` | `running` | User submitted a prompt and Codex started work. |
+| `PreToolUse` | `running` | Codex is about to use a tool. |
+| `PostToolUse` | `running` | Codex finished a tool call. |
+| `PermissionRequest` | `waiting` | Codex is waiting for approval of a command or permission request. |
+| `Stop` | `completed` | Codex finished the turn and the result is ready for review. |
+
+The legacy Python hook remains in `examples/codex-hooks/hooks/codex-pet-event.py` for compatibility during migration, but it is no longer the managed installer path.
 
 ## Enable The Hooks
 
@@ -44,8 +53,8 @@ Codex user level:
 Tools/install-codex-hooks.sh
 ```
 
-This copies the hook script to `~/.codex/hooks/global-pet-assistant/`, writes
-`~/.codex/hooks.json` with an absolute hook script path, and ensures
+This writes `~/.codex/hooks.json` with an absolute bridge path, preserves
+unrelated hook entries, updates this project's managed entries idempotently, and ensures
 `~/.codex/config.toml` contains:
 
 ```toml
@@ -75,51 +84,48 @@ codex_hooks = true
 Restart Codex and trust this repository's `.codex/` config layer if prompted.
 Repo-local hooks only apply when Codex loads that repo's `.codex/` config layer.
 
-## Global Push Disable Switch
+## Disable Or Remove
 
-The hook script supports two Codex-side global off switches. When either switch is active, it exits without contacting the pet app.
-
-Environment variable:
+Temporarily disable the managed bridge without editing hooks:
 
 ```bash
-export CODEX_PET_EVENTS_DISABLED=1
+export GLOBAL_PET_ASSISTANT_DISABLE_CODEX_HOOKS=1
 ```
 
-Persistent local switch:
+Remove managed entries from `~/.codex/hooks.json` by deleting hook commands that contain:
 
-```bash
-Tools/codex-pet-events.sh disable
-Tools/codex-pet-events.sh status
-Tools/codex-pet-events.sh enable
+```text
+global-pet-agent-bridge --source codex
 ```
 
-The persistent switch is the file `~/.codex/global-pet-assistant-disabled`.
+The old Python hook switch `CODEX_PET_EVENTS_DISABLED=1` still applies only to the legacy `codex-pet-event.py` compatibility script.
 
 ## Verification
 
-Validate the hook mapping without contacting the running app:
+Build and install the bridge-backed hooks:
 
 ```bash
-Tools/verify-codex-hook-events.sh
+swift build --product global-pet-agent-bridge
+Tools/install-codex-hooks.sh
 ```
 
 Manually test the app-facing event path:
 
 ```bash
 swift run GlobalPetAssistant
-Tools/verify-event-runtime.sh
+swift run global-pet-agent-bridge --source codex < Tests/GlobalPetAssistantTests/Fixtures/sample-codex-user-prompt.json
 ```
 
-The hook script intentionally ignores local app connection and authentication failures so Codex work is never blocked by the pet app being closed or not yet initialized.
+The bridge intentionally ignores local app socket connection failures so Codex work is never blocked by the pet app being closed or not yet initialized. Generic events should still be verified separately with `Tools/verify-event-runtime.sh`.
 
 ## Audit Logs
 
-The Codex hook script and app runtime both write JSONL logs under `~/.global-pet-assistant/logs`:
+The Codex bridge and app runtime both write JSONL logs under `~/.global-pet-assistant/logs`:
 
 ```bash
-tail -n 50 ~/.global-pet-assistant/logs/codex-hook-events.jsonl
+tail -n 50 ~/.global-pet-assistant/logs/agent-hooks.jsonl
 tail -n 50 ~/.global-pet-assistant/logs/events.jsonl
 tail -n 50 ~/.global-pet-assistant/logs/runtime.jsonl
 ```
 
-Use the hook log to confirm whether Codex produced a hook and whether the hook sent or skipped the event. Use the app event log to confirm whether the app accepted, rate-limited, or rejected the payload.
+Use the hook log to confirm whether Codex produced a hook envelope. Use `runtime.jsonl` to confirm whether the app hook socket accepted or rejected the envelope. Use `events.jsonl` only for generic `LocalPetEvent` ingress through `LocalEventServer`.

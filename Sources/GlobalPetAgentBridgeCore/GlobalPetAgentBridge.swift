@@ -23,6 +23,7 @@ public enum GlobalPetAgentBridgeError: Error, Equatable, CustomStringConvertible
 
 public enum GlobalPetAgentBridge {
     public static let socketEnvironmentKey = "GLOBAL_PET_AGENT_SOCKET"
+    public static let disableEnvironmentKey = "GLOBAL_PET_ASSISTANT_DISABLE_CODEX_HOOKS"
     public static let defaultSocketPath = "\(NSHomeDirectory())/.global-pet-assistant/run/agent-hooks.sock"
     public static let auditLogPath = "\(NSHomeDirectory())/.global-pet-assistant/logs/agent-hooks.jsonl"
 
@@ -142,6 +143,10 @@ public enum GlobalPetAgentBridge {
         send: (Data, String) throws -> Void = sendEnvelope,
         appendAudit: (Data) -> Void = appendAuditLine
     ) -> Int32 {
+        if environment[disableEnvironmentKey] == "1" {
+            return 0
+        }
+
         do {
             let source = try parseSource(arguments: arguments)
             let line = try makeEnvelopeLine(

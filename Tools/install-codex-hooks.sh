@@ -3,15 +3,20 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-HOOK_DIR="$CODEX_HOME/hooks/global-pet-assistant"
-HOOK_SCRIPT="$HOOK_DIR/codex-pet-event.py"
 CONFIG_FILE="$CODEX_HOME/config.toml"
 HOOKS_FILE="$CODEX_HOME/hooks.json"
-FORCE="${FORCE:-0}"
+BRIDGE_PATH="${GLOBAL_PET_AGENT_BRIDGE:-$ROOT_DIR/.build/debug/global-pet-agent-bridge}"
 
-mkdir -p "$HOOK_DIR"
-cp "$ROOT_DIR/examples/codex-hooks/hooks/codex-pet-event.py" "$HOOK_SCRIPT"
-chmod +x "$HOOK_SCRIPT"
+mkdir -p "$CODEX_HOME"
+
+if [[ ! -x "$BRIDGE_PATH" ]]; then
+  swift build --package-path "$ROOT_DIR" --product global-pet-agent-bridge >/dev/null
+fi
+
+if [[ ! -x "$BRIDGE_PATH" ]]; then
+  echo "global-pet-agent-bridge was not built at $BRIDGE_PATH" >&2
+  exit 1
+fi
 
 touch "$CONFIG_FILE"
 if grep -Eq '^[[:space:]]*codex_hooks[[:space:]]*=' "$CONFIG_FILE"; then
@@ -36,71 +41,71 @@ else
   } >> "$CONFIG_FILE"
 fi
 
-if [[ -f "$HOOKS_FILE" ]] && ! grep -q 'global-pet-assistant' "$HOOKS_FILE" && [[ "$FORCE" != "1" ]]; then
-  echo "Refusing to overwrite existing $HOOKS_FILE. Set FORCE=1 to replace it." >&2
-  exit 1
-fi
+python3 - "$HOOKS_FILE" "$BRIDGE_PATH" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
 
-escaped_hook_script="${HOOK_SCRIPT//\\/\\\\}"
-escaped_hook_script="${escaped_hook_script//\"/\\\"}"
-cat > "$HOOKS_FILE" <<JSON
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume",
-        "hooks": [
-          {
+hooks_file = Path(sys.argv[1])
+bridge_path = sys.argv[2]
+managed_needle = "global-pet-agent-bridge"
+command = f'"{bridge_path}" --source codex'
+events = [
+    ("SessionStart", "startup|resume", "Updating pet Codex session state"),
+    ("UserPromptSubmit", None, "Updating pet Codex running state"),
+    ("PreToolUse", None, "Updating pet Codex tool state"),
+    ("PostToolUse", None, "Updating pet Codex tool result"),
+    ("PermissionRequest", "*", "Updating pet Codex approval state"),
+    ("Stop", None, "Updating pet Codex completion state"),
+]
+
+if hooks_file.exists():
+    with hooks_file.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+else:
+    payload = {}
+
+hooks = payload.setdefault("hooks", {})
+
+for event_name, matcher, status_message in events:
+    next_groups = []
+    for group in hooks.get(event_name, []):
+        if not isinstance(group, dict):
+            next_groups.append(group)
+            continue
+        entries = []
+        for entry in group.get("hooks", []):
+            entry_command = entry.get("command", "") if isinstance(entry, dict) else ""
+            if managed_needle not in entry_command:
+                entries.append(entry)
+        if entries:
+            group = dict(group)
+            group["hooks"] = entries
+            next_groups.append(group)
+    managed_group = {
+        "hooks": [{
             "type": "command",
-            "command": "/usr/bin/python3 \\"$escaped_hook_script\\"",
+            "command": command,
             "timeout": 5,
-            "statusMessage": "Updating pet session state"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/usr/bin/python3 \\"$escaped_hook_script\\"",
-            "timeout": 5,
-            "statusMessage": "Updating pet running state"
-          }
-        ]
-      }
-    ],
-    "PermissionRequest": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/usr/bin/python3 \\"$escaped_hook_script\\"",
-            "timeout": 5,
-            "statusMessage": "Updating pet approval state"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/usr/bin/python3 \\"$escaped_hook_script\\"",
-            "timeout": 5,
-            "statusMessage": "Updating pet review state"
-          }
-        ]
-      }
-    ]
-  }
-}
-JSON
+            "statusMessage": status_message
+        }]
+    }
+    if matcher is not None:
+        managed_group["matcher"] = matcher
+    next_groups.append(managed_group)
+    hooks[event_name] = next_groups
+
+hooks_file.parent.mkdir(parents=True, exist_ok=True)
+tmp_file = hooks_file.with_suffix(hooks_file.suffix + ".tmp")
+with tmp_file.open("w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+os.replace(tmp_file, hooks_file)
+PY
 
 echo "Installed Global Pet Assistant Codex hooks:"
-echo "  $HOOK_SCRIPT"
-echo "  $HOOKS_FILE"
+echo "  bridge: $BRIDGE_PATH"
+echo "  hooks:  $HOOKS_FILE"
 echo "Restart Codex sessions to load the user-level hook."
+echo "Disable temporarily with: export GLOBAL_PET_ASSISTANT_DISABLE_CODEX_HOOKS=1"

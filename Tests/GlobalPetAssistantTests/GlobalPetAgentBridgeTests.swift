@@ -59,6 +59,24 @@ struct GlobalPetAgentBridgeTests {
     }
 
     @Test
+    func disableEnvironmentSwitchExitsSuccessfullyWithoutSending() {
+        var didSend = false
+        let exitCode = GlobalPetAgentBridge.run(
+            arguments: ["--source", "codex"],
+            stdinData: Data(#"{"hook_event_name":"SessionStart"}"#.utf8),
+            environment: [GlobalPetAgentBridge.disableEnvironmentKey: "1"],
+            currentDirectory: "/tmp/project",
+            parentProcessID: nil,
+            tty: nil,
+            send: { _, _ in didSend = true },
+            appendAudit: { _ in }
+        )
+
+        #expect(exitCode == 0)
+        #expect(didSend == false)
+    }
+
+    @Test
     func invalidJSONExitsWithUsageFailure() {
         let exitCode = GlobalPetAgentBridge.run(
             arguments: ["--source", "codex"],

@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "UserPromptSubmit",
+  "session_id": "sample-codex-session",
+  "prompt": "Verify the agent hook bridge path.",
+  "cwd": "/tmp/global-pet-assistant"
+}

@@ -56,6 +56,9 @@ let package = Package(
                 "GlobalPetAgentBridgeCore",
                 "PetWebhookBridgeCore"
             ],
+            resources: [
+                .copy("Fixtures")
+            ],
             swiftSettings: [
                 .unsafeFlags([
                     "-F",
