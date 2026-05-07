@@ -6,4 +6,8 @@ struct CodexProvider: AgentProvider {
     func sessionUpdate(from candidate: AgentDiscoveryCandidate) -> AgentSessionUpdate? {
         nil
     }
+
+    func sessionUpdate(from envelope: AgentHookEnvelope) -> AgentSessionUpdate? {
+        nil
+    }
 }

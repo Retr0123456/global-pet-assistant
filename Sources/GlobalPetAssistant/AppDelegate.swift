@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var eventRouter: EventRouter?
     private var focusTimerController: FocusTimerController?
     private var eventServer: LocalEventServer?
+    private var agentDiscoveryService: AgentDiscoveryService?
     private let actionHandler = ActionHandler()
     private var eventPreferences = EventPreferences()
     private var appConfiguration = AppConfiguration.defaultConfiguration
@@ -83,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             installStatusMenu()
             installEventRouter()
             startEventServer()
+            startAgentDiscoveryService()
             window.updateFocusTimerSnapshot(focusTimerController.snapshot)
             window.show()
             AuditLogger.appendRuntime(status: "pet_window_shown", message: "Initial pet window shown")
@@ -94,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        agentDiscoveryService?.stop()
         eventServer?.stop()
         AuditLogger.appendRuntime(status: "app_terminating", message: "GlobalPetAssistant applicationWillTerminate")
     }
@@ -177,6 +180,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSLog("GlobalPetAssistant event server failed to start: \(String(describing: error))")
             AuditLogger.appendRuntime(status: "event_server_failed", message: String(describing: error))
         }
+    }
+
+    private func startAgentDiscoveryService() {
+        let service = AgentDiscoveryService()
+        service.startHookSocket()
+        agentDiscoveryService = service
     }
 
     func menuWillOpen(_ menu: NSMenu) {

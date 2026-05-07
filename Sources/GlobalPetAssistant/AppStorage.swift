@@ -10,6 +10,12 @@ enum AppStorage {
     static let logsDirectory = rootDirectory
         .appendingPathComponent("logs", isDirectory: true)
 
+    static let runDirectory = rootDirectory
+        .appendingPathComponent("run", isDirectory: true)
+
+    static let agentHookSocketURL = runDirectory
+        .appendingPathComponent("agent-hooks.sock")
+
     static let eventsLogURL = logsDirectory
         .appendingPathComponent("events.jsonl")
 
@@ -41,6 +47,10 @@ enum AppStorage {
         )
         try FileManager.default.createDirectory(
             at: logsDirectory,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: runDirectory,
             withIntermediateDirectories: true
         )
     }
