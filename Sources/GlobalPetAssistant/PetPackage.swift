@@ -84,6 +84,22 @@ struct PetPackage: Decodable {
         loadCompatiblePets(in: AppStorage.petsDirectory)
     }
 
+    static func sortedForDisplay(_ packages: [PetPackage]) -> [PetPackage] {
+        packages.sorted { lhs, rhs in
+            lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
+    }
+
+    static func preferredPackage(from packages: [PetPackage], selectedPetID: String?) -> PetPackage? {
+        guard let selectedPetID else {
+            return packages.first
+        }
+
+        return packages.first {
+            $0.id == selectedPetID || $0.directoryURL.lastPathComponent == selectedPetID
+        } ?? packages.first
+    }
+
     static func loadFirstInstalledAppPet() -> PetPackage? {
         loadCompatiblePets(in: AppStorage.petsDirectory).first
     }

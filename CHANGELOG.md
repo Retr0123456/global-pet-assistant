@@ -7,6 +7,8 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+- Added GUI pet switching from the menu bar and pet right-click menu, with the selected pet persisted across launches.
+
 ## 0.3.4 - 2026-05-07
 
 - Replaced the bundled fallback pet with Blobbit, an original generated Codex-compatible default pet.

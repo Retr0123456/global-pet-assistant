@@ -28,6 +28,9 @@ enum AppStorage {
     private static let focusTimerURL = rootDirectory
         .appendingPathComponent("focus-timer.json")
 
+    private static let selectedPetURL = rootDirectory
+        .appendingPathComponent("selected-pet")
+
     private static let configurationURL = rootDirectory
         .appendingPathComponent("config.json")
 
@@ -88,6 +91,21 @@ enum AppStorage {
 
     static func clearFocusTimerRecord() {
         try? FileManager.default.removeItem(at: focusTimerURL)
+    }
+
+    static func loadSelectedPetID() -> String? {
+        guard let data = try? Data(contentsOf: selectedPetURL) else {
+            return nil
+        }
+
+        let selectedPetID = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return selectedPetID?.isEmpty == false ? selectedPetID : nil
+    }
+
+    static func saveSelectedPetID(_ selectedPetID: String) throws {
+        try ensureLayout()
+        try Data((selectedPetID + "\n").utf8).write(to: selectedPetURL, options: [.atomic])
     }
 
     static func loadConfiguration(

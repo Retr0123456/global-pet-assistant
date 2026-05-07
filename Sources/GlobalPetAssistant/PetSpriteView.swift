@@ -9,7 +9,7 @@ final class PetSpriteView: NSView {
         height: CGFloat(PetAtlas.cellHeight) * displayScale
     )
 
-    private let atlas: PetAtlas
+    private var atlas: PetAtlas
     private let spriteLayer = CALayer()
     private var timer: Timer?
     private var currentFrames: [PetAtlasFrame] = []
@@ -49,6 +49,20 @@ final class PetSpriteView: NSView {
         CATransaction.setDisableActions(true)
         spriteLayer.frame = bounds
         CATransaction.commit()
+    }
+
+    func replaceAtlas(_ atlas: PetAtlas, preserving state: PetAnimationState) {
+        self.atlas = atlas
+        playbackGeneration += 1
+        timer?.invalidate()
+        timer = nil
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        spriteLayer.contents = atlas.image
+        CATransaction.commit()
+
+        playLoop(state)
     }
 
     func playLoop(_ state: PetAnimationState) {

@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var muteCurrentSourceItem: NSMenuItem?
     private var unmuteAllSourcesItem: NSMenuItem?
     private var focusTimerMenuItem: NSMenuItem?
+    private var switchPetMenuItem: NSMenuItem?
     private var eventRouter: EventRouter?
     private var focusTimerController: FocusTimerController?
     private var eventServer: LocalEventServer?
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var eventPreferences = EventPreferences()
     private var appConfiguration = AppConfiguration.defaultConfiguration
     private var authorizationToken = ""
+    private var currentPetPackage: PetPackage?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -65,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.petWindow = window
             self.spriteView = spriteView
             self.petBehaviorController = behaviorController
+            self.currentPetPackage = package
             let focusTimerController = FocusTimerController(
                 onSnapshotChange: { [weak self] snapshot in
                     self?.petWindow?.updateFocusTimerSnapshot(snapshot)
@@ -129,6 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(focusTimerMenuItem)
         self.focusTimerMenuItem = focusTimerMenuItem
         menu.addItem(makePreviewStateMenuItem())
+        let switchPetMenuItem = makeSwitchPetMenuItem()
+        menu.addItem(switchPetMenuItem)
+        self.switchPetMenuItem = switchPetMenuItem
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
@@ -182,6 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         muteCurrentSourceItem?.isEnabled = currentSource != nil
         unmuteAllSourcesItem?.isEnabled = !eventPreferences.mutedSources.isEmpty
         rebuildFocusTimerMenu()
+        rebuildSwitchPetMenu()
     }
 
     @objc private func showPet() {
@@ -196,6 +203,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openPetFolder() {
         NSWorkspace.shared.open(AppStorage.petsDirectory)
+    }
+
+    @objc private func selectPet(_ sender: NSMenuItem) {
+        guard let selectedPetID = sender.representedObject as? String else {
+            return
+        }
+
+        do {
+            let package = try loadPetPackage(id: selectedPetID)
+            let atlas = try PetAtlas(contentsOf: package.spritesheetURL)
+            try AppStorage.saveSelectedPetID(package.id)
+            currentPetPackage = package
+            petBehaviorController?.replaceAtlas(atlas)
+            petWindow?.show()
+            AuditLogger.appendRuntime(status: "pet_switched", message: "\(package.id) \(package.directoryURL.path)")
+            rebuildSwitchPetMenu()
+        } catch {
+            showError(title: "Pet could not switch", error: error)
+        }
     }
 
     @objc private func previewPetState(_ sender: NSMenuItem) {
@@ -373,16 +399,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSLog("GlobalPetAssistant could not install bundled default pet: \(String(describing: error))")
         }
 
-        for package in PetPackage.loadInstalledPets() {
-            do {
-                return (package, try PetAtlas(contentsOf: package.spritesheetURL))
-            } catch {
-                NSLog("GlobalPetAssistant could not load installed pet '\(package.id)': \(String(describing: error))")
+        let selectedPetID = AppStorage.loadSelectedPetID()
+        let renderablePackages = loadRenderablePetPackages()
+        let packages = renderablePackages.map { $0.package }
+        if let preferredPackage = PetPackage.preferredPackage(from: packages, selectedPetID: selectedPetID),
+           let renderablePackage = renderablePackages.first(where: { $0.package.id == preferredPackage.id }) {
+            if let selectedPetID,
+               selectedPetID != preferredPackage.id,
+               selectedPetID != preferredPackage.directoryURL.lastPathComponent {
+                NSLog("GlobalPetAssistant selected pet '\(selectedPetID)' was unavailable; using '\(preferredPackage.id)'")
             }
+            return (renderablePackage.package, renderablePackage.atlas)
         }
 
         let bundledPackage = try PetPackage.loadBundledDefaultPet()
         return (bundledPackage, try PetAtlas(contentsOf: bundledPackage.spritesheetURL))
+    }
+
+    private func loadRenderablePetPackages() -> [(package: PetPackage, atlas: PetAtlas)] {
+        PetPackage.loadInstalledPets().compactMap { package in
+            do {
+                return (package, try PetAtlas(contentsOf: package.spritesheetURL))
+            } catch {
+                NSLog("GlobalPetAssistant could not load installed pet '\(package.id)': \(String(describing: error))")
+                return nil
+            }
+        }
+    }
+
+    private func loadPetPackage(id selectedPetID: String) throws -> PetPackage {
+        let packages = loadRenderablePetPackages().map { $0.package }
+        guard let package = packages.first(where: {
+            $0.id == selectedPetID || $0.directoryURL.lastPathComponent == selectedPetID
+        }) else {
+            throw PetSwitchError.petNotFound(selectedPetID)
+        }
+
+        return package
     }
 
     private func makePetContextMenu() -> NSMenu {
@@ -419,6 +472,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(cancelTimerItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makePreviewStateMenuItem())
+        menu.addItem(makeSwitchPetMenuItem())
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
 
         menu.items
@@ -440,6 +494,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         item.submenu = submenu
         return item
+    }
+
+    private func makeSwitchPetMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Switch Pet", action: nil, keyEquivalent: "")
+        item.submenu = makeSwitchPetSubmenu()
+        return item
+    }
+
+    private func rebuildSwitchPetMenu() {
+        switchPetMenuItem?.submenu = makeSwitchPetSubmenu()
+    }
+
+    private func makeSwitchPetSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+        let packages = PetPackage.sortedForDisplay(loadRenderablePetPackages().map { $0.package })
+
+        guard !packages.isEmpty else {
+            let emptyItem = NSMenuItem(title: "No Compatible Pets", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            submenu.addItem(emptyItem)
+            return submenu
+        }
+
+        let currentPetID = currentPetPackage?.id
+        for package in packages {
+            let title = package.displayName.isEmpty ? package.id : package.displayName
+            let item = NSMenuItem(title: title, action: #selector(selectPet(_:)), keyEquivalent: "")
+            item.representedObject = package.id
+            item.target = self
+            item.state = package.id == currentPetID ? .on : .off
+            submenu.addItem(item)
+        }
+
+        return submenu
     }
 
     private func makeFocusTimerMenuItem() -> NSMenuItem {
@@ -531,5 +619,16 @@ private enum FocusTimerInputError: LocalizedError {
 
     var errorDescription: String? {
         "Duration must be greater than zero."
+    }
+}
+
+private enum PetSwitchError: LocalizedError {
+    case petNotFound(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .petNotFound(let petID):
+            "No compatible installed pet named '\(petID)' was found."
+        }
     }
 }

@@ -262,6 +262,11 @@ Codex-compatible pet packages directly, but third-party pet spritesheets or
 character art should only be committed when their redistribution license is
 clear. See [Assets And Licensing](docs/assets-and-licensing.md).
 
+GUI pet switching is available from the menu bar item and the pet right-click
+menu under `Switch Pet`. The submenu lists compatible installed packages from
+`~/.global-pet-assistant/pets`, marks the current pet with a checkmark, and
+applies a new selection immediately. The selected pet persists across launches.
+
 Manual event-runtime verification:
 
 ```bash
@@ -370,6 +375,7 @@ Global Pet Assistant stores local state in `~/.global-pet-assistant`:
 | --- | --- |
 | `config.json` | Source action allowlist and pet import source directories. |
 | `event-preferences.json` | Pause and muted-source preferences. |
+| `selected-pet` | Current GUI-selected pet package id. |
 | `window-origin.json` | Saved pet position. |
 | `pets/` | App-owned imported pet packages. |
 | `logs/` | Runtime, event, and hook audit logs. |

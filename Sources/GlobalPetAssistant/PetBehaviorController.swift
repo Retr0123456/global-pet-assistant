@@ -29,6 +29,11 @@ final class PetBehaviorController {
         spriteView.playLoop(baseState)
     }
 
+    func replaceAtlas(_ atlas: PetAtlas) {
+        let steadyState = dragDirection?.animationState ?? (isHovering ? .jumping : baseState)
+        spriteView.replaceAtlas(atlas, preserving: steadyState)
+    }
+
     func setBaseState(_ state: PetAnimationState) {
         baseState = state
         guard dragDirection == nil, !isPlayingTransient, !isHovering else {
