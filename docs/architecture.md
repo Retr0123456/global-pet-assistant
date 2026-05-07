@@ -219,6 +219,10 @@ Adapters should be thin wrappers around the generic event API:
 
 The first version should prioritize the generic API and `petctl`. Specific adapters can be added after the event contract is stable.
 
+Coding agents can have a richer first-class session model without changing the
+generic event contract. See [Agent Discovery Architecture](agent-discovery-architecture.md)
+for the long-term provider, transport, registry, and thread-panel boundaries.
+
 ## Implementation Notes
 
 - Avoid Electron for the core app.
