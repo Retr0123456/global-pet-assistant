@@ -127,6 +127,18 @@ Kitty manual command flash:
 Tools/install-kitty-command-hook.sh
 ```
 
+Preferred structured kitty plugin:
+
+```bash
+examples/kitty-plugin/install.sh
+source "$HOME/.config/kitty/global-pet-assistant/shell-integration.zsh"
+```
+
+The plugin posts structured terminal events to
+`/terminal-plugin/events`, can emit command completion flash events, and provides
+the `gpa-codex` wrapper for Codex session start/end observations. See
+[`examples/kitty-plugin/README.md`](examples/kitty-plugin/README.md).
+
 The installer copies `examples/hooks/kitty-command-flash.zsh` to
 `~/.global-pet-assistant/hooks/` and adds a guarded source block to `~/.zshrc`.
 It only runs in interactive kitty zsh sessions. Failed commands send a danger
