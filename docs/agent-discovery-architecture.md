@@ -21,6 +21,12 @@ Generic local events
   -> EventRouter
   -> pet animation, flash layer, generic active event snapshots
 
+Trusted terminal plugin events
+  -> TerminalPluginEventReceiver
+  -> command flash projection
+  -> LocalPetEvent
+  -> EventRouter
+
 Coding agent sessions
   -> AgentSource
   -> AgentProvider
@@ -55,6 +61,8 @@ AgentRegistry
 - A provider identifies what the agent is. A control transport identifies how
   the app can observe or control it. A source identifies where a candidate came
   from.
+- Terminal integration means trusted terminal plugin integration, not raw TUI
+  scanning, screen scraping, or best-effort text injection.
 
 ## Core Types
 
@@ -70,7 +78,28 @@ enum AgentKind: String, Codable, Equatable {
 
 enum AgentControlTransportKind: String, Codable, Equatable {
     case agentAppServer = "agent-app-server"
-    case tmux
+    case terminalPlugin = "terminal-plugin"
+}
+
+enum TerminalIntegrationKind: String, Codable, Equatable {
+    case kitty
+}
+
+struct TerminalSessionContext: Codable, Equatable {
+    var kind: TerminalIntegrationKind
+    var sessionId: String
+    var windowId: String?
+    var tabId: String?
+    var cwd: String?
+    var command: String?
+}
+
+struct TerminalObservation: Codable, Equatable {
+    var terminal: TerminalSessionContext
+    var isReachable: Bool
+    var cwd: String?
+    var command: String?
+    var observedAt: Date
 }
 
 enum AgentStatus: String, Codable, Equatable {
@@ -102,7 +131,7 @@ struct AgentSession: Codable, Equatable, Identifiable {
     var pid: Int?
     var cwd: String?
     var tty: String?
-    var tmuxPaneId: String?
+    var terminalContext: TerminalSessionContext?
 
     var title: String?
     var message: String?
@@ -132,6 +161,9 @@ AgentDiscovery/
   AgentEventProjection.swift
   AgentHookEnvelope.swift
   AgentHookSocketServer.swift
+  TerminalPluginEvent.swift
+  TerminalPluginEventReceiver.swift
+  TerminalCommandFlashProjection.swift
 
   providers/
     CodexProvider.swift
@@ -140,14 +172,14 @@ AgentDiscovery/
 
   transports/
     AgentAppServerTransport.swift
-    TmuxControlTransport.swift
+    TerminalTransport.swift
+    KittyTerminalTransport.swift
 
   sources/
     HookEventReceiver.swift
+    TerminalPluginSource.swift
     WorkspaceScanner.swift
     ProcessScanner.swift
-    TerminalScanner.swift
-    TmuxScanner.swift
     AppServerScanner.swift
 
   hooks/
@@ -212,6 +244,60 @@ Examples:
 Provider output should be an agent candidate with normalized identity and
 provider confidence. Providers do not perform control operations.
 
+### Terminal Plugin Integration
+
+Terminal plugin integration is a first-class input path for terminals that expose
+a trusted extension or plugin protocol. It is not raw terminal compatibility.
+
+The clean split is:
+
+```text
+Kitty plugin / kitten
+  -> TerminalPluginEventReceiver
+  -> TerminalCommandFlashProjection
+  -> LocalPetEvent flash
+
+Kitty plugin / kitten
+  -> TerminalPluginEventReceiver
+  -> AgentProvider
+  -> AgentRegistry
+
+AgentControl
+  -> TerminalTransport
+  -> KittyTerminalTransport
+  -> Kitty plugin / remote-control endpoint
+```
+
+Terminal command results and coding-agent sessions must remain separate:
+
+- A normal shell command completion becomes a short flash event.
+- A terminal event recognized by `CodexProvider`, `ClaudeCodeProvider`, or
+  another provider can update `AgentRegistry`.
+- `KittyTerminalTransport` may inject follow-up text only into a known
+  provider-approved terminal session.
+- `KittyTerminalTransport` must not approve or deny permissions by typing text.
+
+### TerminalTransport
+
+`TerminalTransport` describes structured interaction with one trusted terminal
+integration. The first implementation should be `KittyTerminalTransport`.
+
+Recommended protocol shape:
+
+```swift
+protocol TerminalTransport {
+    var integrationKind: TerminalIntegrationKind { get }
+
+    func observe(_ context: TerminalSessionContext) async throws -> TerminalObservation
+    func sendMessage(_ text: String, to context: TerminalSessionContext) async throws
+}
+```
+
+Terminal transports are implementation details behind
+`AgentControlTransportKind.terminalPlugin`. The agent model should not grow
+terminal-specific fields such as kitty window ids or pane ids directly; those
+belong inside `TerminalSessionContext`.
+
 ### AgentControlTransport
 
 Describes how a known session can be observed or controlled.
@@ -221,18 +307,19 @@ Potential capability policy:
 | Transport | Capabilities |
 | --- | --- |
 | `agent-app-server` | Contract-dependent: may expose `observe`, `read-history`, `send-message`, `approve-permission`, `deny-permission` after a concrete protocol exists. |
-| `tmux` | `observe`, `send-message` |
+| `terminal-plugin` | `observe`, `send-message` for provider-approved sessions only. |
 
 Current implementation policy:
 
 | Transport | First exposed behavior |
 | --- | --- |
 | `agent-app-server` | Placeholder only until the protocol exists. |
-| `tmux` | Planned separately for known sessions only; see the tmux transport plan. |
+| `terminal-plugin` | Placeholder until `TerminalTransport` and `KittyTerminalTransport` are implemented. |
 
-Transports are capability providers, not identity providers. They may contribute
-metadata such as `pid`, `tty`, or `tmuxPaneId`, but they should not decide
-whether a session is Codex, Claude Code, or OpenCode.
+Transports are capability providers, not identity providers. Providers and hook
+envelopes may record context metadata such as `pid`, `tty`, or
+`terminalContext`, but transport metadata should not decide whether a session is
+Codex, Claude Code, or OpenCode.
 
 ### AgentControl
 
@@ -258,7 +345,7 @@ Every control method must check:
 - The provider allows the operation for the current status.
 - The user or config has explicitly enabled that class of control.
 
-Approval and denial must start as app-server-only capabilities. Tmux text
+Approval and denial must start as app-server-only capabilities. Terminal text
 injection is not approval semantics unless a provider implements a safe,
 provider-specific protocol for it.
 
@@ -271,14 +358,15 @@ Recommended long-term implementation order:
 | Source | First phase behavior |
 | --- | --- |
 | `HookEventReceiver` | Real implementation for Codex hook events first. Claude Code and OpenCode remain provider shells until separately implemented. |
+| `TerminalPluginSource` | Placeholder until a trusted terminal plugin protocol exists. Later accepts structured events from integrations such as kitty. |
 | `WorkspaceScanner` | Placeholder in the first slice. Later reads known session files, logs, or config markers under cwd. |
-| `TmuxScanner` | Placeholder in the first slice. Later validates or enriches known sessions; it must not create high-confidence sessions by itself. |
 | `AppServerScanner` | Placeholder until agent-side app-server protocol is defined. |
 | `ProcessScanner` | Placeholder or diagnostic-only because cwd/tty access can be permission-sensitive on macOS. |
-| `TerminalScanner` | Placeholder or diagnostic-only because terminal window introspection is app-specific. |
 
 Best-effort scanners must never be required for correctness. Hook and app-server
-signals should be treated as stronger than process or terminal inference.
+signals should be treated as stronger than process inference. Terminal plugin
+events are acceptable only when they are structured events from an installed,
+trusted terminal integration.
 
 ## UI Projection
 
@@ -346,6 +434,8 @@ Generic local events:
 - Keep the existing local token, body limit, rate limit, and action allowlist.
 - Accept unknown sources for state notifications.
 - Reject unknown-source actions as today.
+- Accept terminal command flash events as generic local events only after they
+  pass the terminal plugin receiver's local authentication and schema checks.
 
 Agent controls:
 
@@ -357,6 +447,7 @@ Agent controls:
   exposes first-class safe semantics.
 
 Do not implement agent approval as arbitrary text injection into a terminal.
+Do not let terminal command flash events create or update `AgentRegistry`.
 
 ## Compatibility Strategy
 
@@ -377,12 +468,14 @@ Legacy LocalPetEvent
 ```
 
 No generic event sender should be forced to provide `AgentKind`, transport,
-capabilities, pid, tty, or tmux metadata.
+capabilities, pid, tty, or terminal plugin metadata.
 
 ## Phased Implementation
 
 For the first implementation slice, see
 [Codex Session Listening Refactor Plan](codex-session-listening-refactor-plan.md).
+For trusted terminal plugin transport design, see
+[Terminal Plugin Transport Architecture](terminal-plugin-transport-architecture.md).
 
 ### Phase 1: Models And Registry
 
@@ -409,8 +502,10 @@ For the first implementation slice, see
 
 ### Phase 4: Transports
 
-- Add `TmuxControlTransport` for observe and send-message only. See
-  [Tmux Control Transport Plan](tmux-control-transport-plan.md).
+- Add `TerminalTransport` and `KittyTerminalTransport` after hook-backed agent
+  identity is stable.
+- Keep kitty command flash events in the generic flash layer unless an
+  `AgentProvider` recognizes the event as a coding-agent session.
 - Add `AgentAppServerTransport` after a concrete agent-side app-server protocol
   exists.
 
@@ -427,8 +522,10 @@ For the first implementation slice, see
 - Do not make `source` the permanent agent session primary key.
 - Do not let `EventRouter` own agent registry behavior.
 - Do not overload `LocalEventServer` as an agent control server.
-- Do not implement approval by blindly typing into tmux or raw terminals.
+- Do not implement approval by blindly typing into tmux, kitty, or raw terminals.
 - Do not require process or terminal scanning for normal operation.
-- Do not support arbitrary raw TUI agents, even when they happen to run inside
-  tmux. Tmux support is only for known coding-agent sessions with
-  provider-approved identity.
+- Do not support arbitrary raw TUI agents, including sessions that happen to run
+  inside tmux.
+- Do not add tmux control or tmux scanning without a new architecture review.
+- Do not treat `KittyTerminalTransport` as a provider. It is a terminal
+  implementation behind `TerminalTransport`, not Codex or Claude Code identity.

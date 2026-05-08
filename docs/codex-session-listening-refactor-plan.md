@@ -28,8 +28,9 @@ In scope:
 - Hook bridge and hook socket ingestion for Codex lifecycle events.
 - Projection from Codex sessions into pet animation and long-lived thread data.
 - Empty shells for Claude Code and OpenCode providers.
-- Empty shells for app-server and tmux control transports.
-- Empty shells for tmux, process, terminal, workspace, and app-server scanners.
+- Empty shell for the app-server control transport.
+- Empty shells for terminal plugin transport, process scanner, workspace scanner,
+  and app-server scanner.
 - Tests and verification criteria for the Codex path and generic event
   compatibility.
 
@@ -42,7 +43,8 @@ Out of scope for this slice:
 - Codex follow-up message sending.
 - Tmux injection.
 - Raw terminal/TUI control.
-- Process or terminal scanning as a required discovery path.
+- Kitty terminal plugin behavior.
+- Process scanning as a required discovery path.
 - Rollout JSONL history rendering in the UI.
 
 Rollout JSONL parsing may be introduced as a later read-only enrichment phase,
@@ -64,6 +66,8 @@ Important reference decisions to reuse:
   terminal evidence.
 - Terminal context matters for distinguishing CLI-style sessions from desktop or
   app-server contexts.
+- Terminal plugin context, such as kitty session identity, should be treated as
+  structured context only. It does not replace provider identity.
 - Rollout JSONL is a history/enrichment fallback, not the primary real-time
   session source.
 - App-server is the richer control path, but it is out of scope for this first
@@ -130,6 +134,9 @@ Sources/GlobalPetAssistant/AgentDiscovery/
   AgentEventProjection.swift
   AgentHookEnvelope.swift
   AgentHookSocketServer.swift
+  TerminalPluginEvent.swift
+  TerminalPluginEventReceiver.swift
+  TerminalCommandFlashProjection.swift
 
   providers/
     CodexProvider.swift
@@ -138,14 +145,14 @@ Sources/GlobalPetAssistant/AgentDiscovery/
 
   transports/
     AgentAppServerTransport.swift
-    TmuxControlTransport.swift
+    TerminalTransport.swift
+    KittyTerminalTransport.swift
 
   sources/
     HookEventReceiver.swift
+    TerminalPluginSource.swift
     WorkspaceScanner.swift
     ProcessScanner.swift
-    TerminalScanner.swift
-    TmuxScanner.swift
     AppServerScanner.swift
 
   hooks/
@@ -169,9 +176,13 @@ The bridge is a short-lived command process. It reads Codex hook stdin, enriches
 the payload with environment and terminal context, sends one envelope to the app
 socket, and exits.
 
-Raw TUI is intentionally not a compatibility target. Tmux pane routing is useful
-only for already-known, provider-approved sessions; it is not sufficient to turn
-an arbitrary terminal TUI into a supported agent.
+Raw TUI is intentionally not a compatibility target. Terminal environment data
+may be kept as context when Codex hooks provide it, but this plan does not use
+terminal control for discovery, observation, or message injection.
+
+Terminal plugin support is a later trusted-terminal slice. The first concrete
+implementation should be `KittyTerminalTransport`, but this Codex listening
+slice only adds clean placeholders and does not send messages through kitty.
 
 ## Naming Rules
 
@@ -180,6 +191,9 @@ Use these names consistently:
 - `AgentSession.id`: canonical coding-agent session identity.
 - `LocalPetEvent.source`: generic event source label only.
 - `AgentControlTransportKind`: agent control/observation transport.
+- `TerminalTransport`: trusted terminal plugin control abstraction.
+- `KittyTerminalTransport`: first `TerminalTransport` implementation, not an
+  agent provider.
 - `LocalEventServer`: pet event ingress server only.
 - `AgentHookSocketServer`: agent hook ingestion server only.
 - `AgentAppServerTransport`: future Codex app-server-style control transport.
@@ -230,17 +244,20 @@ Add:
 - `AgentThreadSnapshot`
 - `AgentThreadProjection`
 - `AgentEventProjection`
+- `TerminalSessionContext`
+- `TerminalPluginEvent`
+- `TerminalPluginEventReceiver`
+- `TerminalTransport`
 
 Create placeholders:
 
 - `ClaudeCodeProvider`
 - `OpenCodeProvider`
 - `AgentAppServerTransport`
-- `TmuxControlTransport`
+- `KittyTerminalTransport`
+- `TerminalPluginSource`
 - `WorkspaceScanner`
 - `ProcessScanner`
-- `TerminalScanner`
-- `TmuxScanner`
 - `AppServerScanner`
 
 Placeholder behavior:
@@ -264,16 +281,18 @@ Registry requirements:
 Suggested merge strength:
 
 ```text
-hook event > app-server snapshot > rollout JSONL > tmux scan > process scan > terminal scan > workspace marker
+hook event > terminal plugin event > app-server snapshot > rollout JSONL > process scan > workspace marker
 ```
 
-For this first slice, only `hook event` is implemented. The other sources exist
-only to make future ownership explicit.
+For this first slice, only `hook event` is implemented. `terminal plugin event`
+is included in the model so kitty can be added later without treating terminal
+screen text as an identity source.
 
 Acceptance criteria:
 
 - Agent model code exists under `AgentDiscovery/`.
 - Empty non-Codex providers and transports exist but expose no behavior.
+- `KittyTerminalTransport` exists only as an unsupported placeholder.
 - `LocalPetEvent` is unchanged.
 - `EventRouter` is unchanged.
 - `LocalEventServer` is unchanged.
@@ -493,8 +512,7 @@ Metadata to preserve:
 - preview/message candidate
 - terminal context
 - tty
-- tmux pane id if present
-- kitty focus metadata if present
+- terminal integration session metadata if present
 - transcript path
 - rollout path
 - session file path
@@ -517,8 +535,8 @@ approve-permission
 deny-permission
 ```
 
-These are intentionally disabled until rollout parsing, tmux transport, or
-app-server transport is explicitly implemented.
+These are intentionally disabled until rollout parsing or app-server transport
+is explicitly implemented.
 
 Acceptance criteria:
 
@@ -727,7 +745,6 @@ these names for future control work:
 - `CodexApprovalController`
 - `CodexFollowUpController`
 - `CodexAppServerTransport`
-- `CodexTmuxMessageTransport` if needed later
 
 Until those slices are implemented, capability flags are the only contract:
 Codex hook-backed sessions must not expose `send-message`,
@@ -748,12 +765,8 @@ Acceptance criteria:
 - If a permission is pending, the row may show `approval-required`, but control
   actions are disabled or absent.
 - No code path sends text to tmux.
+- No code path sends text through kitty.
 - No code path launches `codex app-server`.
-
-Tmux control is planned separately in
-[Tmux Control Transport Plan](tmux-control-transport-plan.md). It should be
-implemented after Codex hook-backed identity is stable and before app-server
-controls if CLI follow-up messaging becomes the next priority.
 
 ## Verification Plan
 
@@ -866,8 +879,10 @@ The refactor is complete for this slice when all of these are true:
 - Codex rows are available through `AgentThreadSnapshot`.
 - Generic events still work independently.
 - Claude Code and OpenCode have empty provider shells only.
-- App-server, tmux, process, terminal, workspace, and rollout paths are
+- App-server, process, terminal plugin, workspace, and rollout paths are
   placeholders or unsupported.
+- Tmux control and tmux scanning are not part of this plan.
+- Kitty terminal plugin control is not implemented in this plan.
 - Raw TUI sessions are explicitly unsupported.
 - Approve, deny, and follow-up controls are not implemented.
 - Tests cover registry, Codex provider mapping, hook envelope, event projection,
@@ -877,8 +892,8 @@ The refactor is complete for this slice when all of these are true:
 
 ## Rejected Shortcuts
 
-- Adding `agentSessionId`, `agentKind`, `transport`, `pid`, `tty`, or
-  `tmuxPaneId` to `LocalPetEvent`.
+- Adding `agentSessionId`, `agentKind`, `transport`, `pid`, `tty`,
+  `tmuxPaneId`, or kitty ids to `LocalPetEvent`.
 - Reusing `LocalEventServer` as the hook socket or agent control server.
 - Continuing to route Codex hook payloads directly to `EventRouter`.
 - Letting `EventRouter` own agent expiry or merge policy.
@@ -887,9 +902,11 @@ The refactor is complete for this slice when all of these are true:
 - Implementing approval by terminal text injection.
 - Starting Codex app-server before the app-server transport contract exists.
 - Building process or terminal scanning before hook-backed identity is solid.
-- Supporting arbitrary raw TUI sessions, even when they happen to run inside
-  tmux. Tmux is only for known coding-agent sessions with provider-approved
-  identity.
+- Adding tmux control or tmux scanning to the Codex session-listening slice.
+- Implementing `KittyTerminalTransport.sendMessage` in the Codex
+  session-listening slice.
+- Supporting arbitrary raw TUI sessions, including sessions that happen to run
+  inside tmux.
 
 ## Open Questions
 

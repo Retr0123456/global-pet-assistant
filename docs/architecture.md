@@ -219,9 +219,16 @@ Adapters should be thin wrappers around the generic event API:
 
 The first version should prioritize the generic API and `petctl`. Specific adapters can be added after the event contract is stable.
 
-Coding agents can have a richer first-class session model without changing the
-generic event contract. See [Agent Discovery Architecture](agent-discovery-architecture.md)
-for the long-term provider, transport, registry, and thread-panel boundaries.
+## Agent And Terminal Integrations
+
+Coding agents use a dedicated session architecture instead of overloading the
+generic event router. See
+[Agent Discovery Architecture](agent-discovery-architecture.md).
+
+Trusted terminal plugin integrations, starting with kitty, can feed command
+flash events into the generic event pipeline and provide terminal-backed control
+routes for known coding-agent sessions. See
+[Terminal Plugin Transport Architecture](terminal-plugin-transport-architecture.md).
 
 ## Implementation Notes
 
