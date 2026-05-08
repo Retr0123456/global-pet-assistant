@@ -945,7 +945,7 @@ private enum ThreadGlassStyle {
     }
 
     @MainActor static func configurePanelRow(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
-        glassView.style = .clear
+        glassView.style = .regular
         glassView.cornerRadius = cornerRadius
         glassView.tintColor = nil
     }
