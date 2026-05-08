@@ -1074,7 +1074,7 @@ private final class ThreadMessageRowView: NSView {
     private static let fixedHeight: CGFloat = 78
     private static let replyControlRadius: CGFloat = 12
     private static let replyControlHeight: CGFloat = 34
-    private static let replyButtonWidth: CGFloat = 96
+    private static let replyButtonWidth: CGFloat = 76
     private static let replyInputWidth: CGFloat = 218
 
     private let thread: ThreadDisplayRow
@@ -1088,8 +1088,8 @@ private final class ThreadMessageRowView: NSView {
     private let replyControlGlassView = PassthroughGlassEffectView()
     private let replyControlContentView = NSView()
     private let replyButton = ReplyTextButton()
-    private let messageField = NSTextField()
-    private let sendButton = NSButton()
+    private let messageField = ReplyTextField()
+    private let sendButton = ReplySendButton()
     private let closeButton = NSButton()
     private var hoverTrackingArea: NSTrackingArea?
     private var replyControlWidthConstraint: NSLayoutConstraint?
@@ -1203,22 +1203,14 @@ private final class ThreadMessageRowView: NSView {
             messageField.placeholderString = "Message"
             messageField.font = NSFont.systemFont(ofSize: 12, weight: .regular)
             messageField.lineBreakMode = .byTruncatingTail
-            messageField.isBordered = false
-            messageField.drawsBackground = false
             messageField.target = self
             messageField.action = #selector(sendMessage)
             messageField.isHidden = true
 
             replyControlContentView.addSubview(sendButton)
             sendButton.translatesAutoresizingMaskIntoConstraints = false
-            sendButton.isBordered = false
-            sendButton.image = NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: "Send message")
-            sendButton.imagePosition = .imageOnly
-            sendButton.imageScaling = .scaleProportionallyDown
-            sendButton.contentTintColor = NSColor.controlAccentColor
             sendButton.target = self
             sendButton.action = #selector(sendMessage)
-            sendButton.setButtonType(.momentaryPushIn)
             sendButton.isHidden = true
         }
 
@@ -1376,6 +1368,83 @@ private final class ReplyTextButton: NSView {
             textField.trailingAnchor.constraint(equalTo: trailingAnchor),
             textField.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
+    }
+}
+
+private final class ReplyTextField: NSTextField {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupField()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupField()
+    }
+
+    override var focusRingType: NSFocusRingType {
+        get { .none }
+        set {}
+    }
+
+    private func setupField() {
+        isBordered = false
+        drawsBackground = false
+        focusRingType = .none
+        textColor = NSColor.labelColor
+        placeholderAttributedString = NSAttributedString(
+            string: "Message",
+            attributes: [
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .font: NSFont.systemFont(ofSize: 12, weight: .regular)
+            ]
+        )
+    }
+}
+
+private final class ReplySendButton: NSButton {
+    private var hoverTrackingArea: NSTrackingArea?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupButton()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupButton()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        hoverTrackingArea = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        contentTintColor = NSColor.controlAccentColor
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        contentTintColor = NSColor.labelColor
+    }
+
+    private func setupButton() {
+        isBordered = false
+        image = NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: "Send message")
+        imagePosition = .imageOnly
+        imageScaling = .scaleProportionallyDown
+        contentTintColor = NSColor.labelColor
+        setButtonType(.momentaryPushIn)
     }
 }
 
