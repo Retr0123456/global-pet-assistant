@@ -274,7 +274,7 @@ final class PetWindowContentView: NSView {
     }
 
     private let petView: PetSpriteView
-    private let threadBadgeButton = ThreadBadgeGlassButton()
+    private let threadBadgeButton = ThreadBadgeEffectButton()
     private let threadPanelView = NSView()
     private let threadPanelContentView = NSView()
     private let threadStackView = NSStackView()
@@ -933,31 +933,47 @@ private final class FlashMessageRowView: NSView {
     }
 }
 
-private enum ThreadGlassStyle {
-    @MainActor static var tintColor: NSColor {
-        NSColor.controlAccentColor.withAlphaComponent(0.10)
+private enum ThreadVisualEffectStyle {
+    @MainActor static func configureBadge(_ effectView: NSVisualEffectView, cornerRadius: CGFloat) {
+        configure(effectView, cornerRadius: cornerRadius, material: .menu, borderAlpha: 0.18)
     }
 
-    @MainActor static func configureBadge(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
-        glassView.style = .regular
-        glassView.cornerRadius = cornerRadius
-        glassView.tintColor = tintColor
+    @MainActor static func configurePanelRow(_ effectView: NSVisualEffectView, cornerRadius: CGFloat) {
+        configure(effectView, cornerRadius: cornerRadius, material: .hudWindow, borderAlpha: 0.20)
     }
 
-    @MainActor static func configurePanelRow(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
-        glassView.style = .clear
-        glassView.cornerRadius = cornerRadius
-        glassView.tintColor = nil
+    @MainActor static func configureReplyControl(_ effectView: NSVisualEffectView, cornerRadius: CGFloat) {
+        configure(effectView, cornerRadius: cornerRadius, material: .hudWindow, borderAlpha: 0.12)
     }
 
-    @MainActor static func configureReplyControl(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
-        glassView.style = .clear
-        glassView.cornerRadius = cornerRadius
-        glassView.tintColor = nil
+    @MainActor private static func configure(
+        _ effectView: NSVisualEffectView,
+        cornerRadius: CGFloat,
+        material: NSVisualEffectView.Material,
+        borderAlpha: CGFloat
+    ) {
+        effectView.material = material
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        effectView.isEmphasized = true
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = cornerRadius
+        effectView.layer?.masksToBounds = true
+        effectView.layer?.borderWidth = 1
+        effectView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(borderAlpha).cgColor
     }
 }
 
-private final class PassthroughGlassEffectView: NSGlassEffectView {
+private final class PassthroughVisualEffectView: NSVisualEffectView {
+    var contentView: NSView? {
+        didSet {
+            oldValue?.removeFromSuperview()
+            if let contentView {
+                addSubview(contentView)
+            }
+        }
+    }
+
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hitView = super.hitTest(point) else {
             return nil
@@ -972,13 +988,13 @@ private final class PassthroughGlassEffectView: NSGlassEffectView {
     }
 }
 
-private final class ThreadBadgeGlassButton: NSView {
+private final class ThreadBadgeEffectButton: NSView {
     private static let cornerRadius: CGFloat = 10
     private static let iconSize: CGFloat = 14
 
     var onPress: (() -> Void)?
 
-    private let glassView = PassthroughGlassEffectView()
+    private let effectView = PassthroughVisualEffectView()
     private let contentView = NSView()
     private let imageView = NSImageView()
     private let textField = NSTextField(labelWithString: "")
@@ -1023,10 +1039,10 @@ private final class ThreadBadgeGlassButton: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        addSubview(glassView)
-        glassView.translatesAutoresizingMaskIntoConstraints = false
-        ThreadGlassStyle.configureBadge(glassView, cornerRadius: Self.cornerRadius)
-        glassView.contentView = contentView
+        addSubview(effectView)
+        effectView.translatesAutoresizingMaskIntoConstraints = false
+        ThreadVisualEffectStyle.configureBadge(effectView, cornerRadius: Self.cornerRadius)
+        effectView.contentView = contentView
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         contentView.wantsLayer = true
@@ -1044,15 +1060,15 @@ private final class ThreadBadgeGlassButton: NSView {
         textField.textColor = .labelColor
 
         NSLayoutConstraint.activate([
-            glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            glassView.topAnchor.constraint(equalTo: topAnchor),
-            glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            effectView.topAnchor.constraint(equalTo: topAnchor),
+            effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            contentView.leadingAnchor.constraint(equalTo: glassView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: glassView.trailingAnchor),
-            contentView.topAnchor.constraint(equalTo: glassView.topAnchor),
-            contentView.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
+            contentView.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: effectView.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
 
             imageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             imageView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -1081,11 +1097,11 @@ private final class ThreadMessageRowView: NSView {
     private let onOpen: (ThreadDisplayRow) -> Void
     private let onDismiss: (ThreadDisplayRow) -> Void
     private let onSendMessage: (ThreadDisplayRow, String) -> Void
-    private let glassView: PassthroughGlassEffectView
+    private let effectView: PassthroughVisualEffectView
     private let contentView = ThreadRowContentView()
     private let statusBadgeView: ThreadStatusBadgeView
     private let textView: ThreadMessageTextView
-    private let replyControlGlassView = PassthroughGlassEffectView()
+    private let replyControlEffectView = PassthroughVisualEffectView()
     private let replyControlContentView = NSView()
     private let replyButton = ReplyTextButton()
     private let messageField = ReplyTextField()
@@ -1105,7 +1121,7 @@ private final class ThreadMessageRowView: NSView {
         self.onOpen = onOpen
         self.onDismiss = onDismiss
         self.onSendMessage = onSendMessage
-        self.glassView = PassthroughGlassEffectView()
+        self.effectView = PassthroughVisualEffectView()
         self.statusBadgeView = ThreadStatusBadgeView(status: thread.status)
         self.textView = ThreadMessageTextView(thread: thread)
         super.init(frame: .zero)
@@ -1166,10 +1182,10 @@ private final class ThreadMessageRowView: NSView {
     private func setupView() {
         translatesAutoresizingMaskIntoConstraints = false
 
-        addSubview(glassView)
-        glassView.translatesAutoresizingMaskIntoConstraints = false
-        ThreadGlassStyle.configurePanelRow(glassView, cornerRadius: Self.cornerRadius)
-        glassView.contentView = contentView
+        addSubview(effectView)
+        effectView.translatesAutoresizingMaskIntoConstraints = false
+        ThreadVisualEffectStyle.configurePanelRow(effectView, cornerRadius: Self.cornerRadius)
+        effectView.contentView = contentView
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         contentView.wantsLayer = true
@@ -1184,11 +1200,11 @@ private final class ThreadMessageRowView: NSView {
         textView.translatesAutoresizingMaskIntoConstraints = false
 
         if thread.canSendMessage {
-            contentView.addSubview(replyControlGlassView)
-            replyControlGlassView.translatesAutoresizingMaskIntoConstraints = false
-            ThreadGlassStyle.configureReplyControl(replyControlGlassView, cornerRadius: Self.replyControlRadius)
-            replyControlGlassView.contentView = replyControlContentView
-            replyControlGlassView.isHidden = true
+            contentView.addSubview(replyControlEffectView)
+            replyControlEffectView.translatesAutoresizingMaskIntoConstraints = false
+            ThreadVisualEffectStyle.configureReplyControl(replyControlEffectView, cornerRadius: Self.replyControlRadius)
+            replyControlEffectView.contentView = replyControlContentView
+            replyControlEffectView.isHidden = true
 
             replyControlContentView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1230,15 +1246,15 @@ private final class ThreadMessageRowView: NSView {
         closeButton.setButtonType(.momentaryPushIn)
 
         NSLayoutConstraint.activate([
-            glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            glassView.topAnchor.constraint(equalTo: topAnchor),
-            glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            effectView.topAnchor.constraint(equalTo: topAnchor),
+            effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            contentView.leadingAnchor.constraint(equalTo: glassView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: glassView.trailingAnchor),
-            contentView.topAnchor.constraint(equalTo: glassView.topAnchor),
-            contentView.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
+            contentView.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: effectView.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
 
             closeButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
             closeButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
@@ -1257,18 +1273,18 @@ private final class ThreadMessageRowView: NSView {
         ])
 
         if thread.canSendMessage {
-            let widthConstraint = replyControlGlassView.widthAnchor.constraint(equalToConstant: Self.replyButtonWidth)
+            let widthConstraint = replyControlEffectView.widthAnchor.constraint(equalToConstant: Self.replyButtonWidth)
             replyControlWidthConstraint = widthConstraint
             NSLayoutConstraint.activate([
-                replyControlGlassView.trailingAnchor.constraint(equalTo: textView.trailingAnchor),
-                replyControlGlassView.bottomAnchor.constraint(equalTo: textView.bottomAnchor, constant: -8),
+                replyControlEffectView.trailingAnchor.constraint(equalTo: textView.trailingAnchor),
+                replyControlEffectView.bottomAnchor.constraint(equalTo: textView.bottomAnchor, constant: -8),
                 widthConstraint,
-                replyControlGlassView.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
+                replyControlEffectView.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
 
-                replyControlContentView.leadingAnchor.constraint(equalTo: replyControlGlassView.leadingAnchor),
-                replyControlContentView.trailingAnchor.constraint(equalTo: replyControlGlassView.trailingAnchor),
-                replyControlContentView.topAnchor.constraint(equalTo: replyControlGlassView.topAnchor),
-                replyControlContentView.bottomAnchor.constraint(equalTo: replyControlGlassView.bottomAnchor),
+                replyControlContentView.leadingAnchor.constraint(equalTo: replyControlEffectView.leadingAnchor),
+                replyControlContentView.trailingAnchor.constraint(equalTo: replyControlEffectView.trailingAnchor),
+                replyControlContentView.topAnchor.constraint(equalTo: replyControlEffectView.topAnchor),
+                replyControlContentView.bottomAnchor.constraint(equalTo: replyControlEffectView.bottomAnchor),
 
                 replyButton.leadingAnchor.constraint(equalTo: replyControlContentView.leadingAnchor),
                 replyButton.trailingAnchor.constraint(equalTo: replyControlContentView.trailingAnchor),
@@ -1321,7 +1337,7 @@ private final class ThreadMessageRowView: NSView {
         guard thread.canSendMessage else {
             return
         }
-        replyControlGlassView.isHidden = !isVisible
+        replyControlEffectView.isHidden = !isVisible
         if isVisible, !isReplying {
             replyControlWidthConstraint?.constant = Self.replyButtonWidth
             replyButton.isHidden = false
