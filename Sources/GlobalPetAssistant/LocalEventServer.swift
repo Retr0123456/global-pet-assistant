@@ -16,6 +16,12 @@ final class LocalEventServer {
     private let authorizationToken: String
     private let onEvent: @MainActor (LocalPetEvent) -> PetAnimationState
     private let onHealth: @MainActor () -> EventRouterSnapshot?
+    private lazy var terminalPluginReceiver = TerminalPluginEventReceiver(
+        authorizationToken: authorizationToken,
+        onFlashEvent: { [weak self] event in
+            _ = self?.route(event)
+        }
+    )
     private var socketFileDescriptor: Int32 = -1
     private var isRunning = false
 
@@ -141,6 +147,11 @@ final class LocalEventServer {
                 return
             }
 
+            if request.method == "POST", request.path == "/terminal-plugin/events" {
+                try handleTerminalPluginEvent(request, client: client)
+                return
+            }
+
             guard request.method == "POST", request.path == "/events" else {
                 try writeResponse(
                     to: client,
@@ -250,6 +261,43 @@ final class LocalEventServer {
                 reason: "Bad Request",
                 body: ["ok": false, "error": String(describing: error)]
             )
+        }
+    }
+
+    private func handleTerminalPluginEvent(_ request: LocalHTTPRequest, client: Int32) throws {
+        do {
+            let event = try terminalPluginReceiver.receive(
+                data: request.body,
+                authorizationHeader: request.headers["authorization"]
+            )
+            AuditLogger.appendEvent(
+                status: "terminal_plugin_accepted",
+                event: LocalPetEvent(
+                    source: "terminal-plugin:\(event.terminal.kind.rawValue)",
+                    type: event.kind.rawValue,
+                    ttlMs: 1
+                ),
+                httpStatus: 202
+            )
+            try writeResponse(
+                to: client,
+                status: 202,
+                reason: "Accepted",
+                body: ["ok": true, "kind": event.kind.rawValue]
+            )
+        } catch TerminalPluginEventReceiverError.unauthorized {
+            try writeResponse(to: client, status: 401, reason: "Unauthorized", body: ["ok": false, "error": "unauthorized"])
+        } catch TerminalPluginEventReceiverError.payloadTooLarge {
+            try writeResponse(to: client, status: 413, reason: "Payload Too Large", body: ["ok": false, "error": "payload_too_large"])
+        } catch TerminalPluginEventReceiverError.rateLimited(let retryAfterMs) {
+            try writeResponse(
+                to: client,
+                status: 429,
+                reason: "Too Many Requests",
+                body: ["ok": false, "error": "rate_limited", "retryAfterMs": retryAfterMs]
+            )
+        } catch TerminalPluginEventReceiverError.malformedEvent {
+            try writeResponse(to: client, status: 400, reason: "Bad Request", body: ["ok": false, "error": "malformed_event"])
         }
     }
 
