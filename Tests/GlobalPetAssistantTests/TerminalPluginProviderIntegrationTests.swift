@@ -30,6 +30,15 @@ struct TerminalPluginProviderIntegrationTests {
     }
 
     @Test
+    func codexTerminalEventCanMarkSessionCompleted() {
+        let service = AgentDiscoveryService()
+
+        service.receiveTerminalPluginEvent(codexTerminalEvent(exitCode: 0))
+
+        #expect(service.snapshot.sessions.first?.status == .completed)
+    }
+
+    @Test
     func hookBackedIdentityIsNotOverwrittenByTerminalPluginMetadata() throws {
         let service = AgentDiscoveryService()
         service.receiveHookEnvelope(try AgentHookEnvelope.make(
