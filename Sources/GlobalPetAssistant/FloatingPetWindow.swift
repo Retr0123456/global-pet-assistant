@@ -945,13 +945,13 @@ private enum ThreadGlassStyle {
     }
 
     @MainActor static func configurePanelRow(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
-        glassView.style = .regular
+        glassView.style = .clear
         glassView.cornerRadius = cornerRadius
         glassView.tintColor = nil
     }
 
     @MainActor static func configureReplyControl(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
-        glassView.style = .regular
+        glassView.style = .clear
         glassView.cornerRadius = cornerRadius
         glassView.tintColor = nil
     }
@@ -1173,7 +1173,7 @@ private final class ThreadMessageRowView: NSView {
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.18).cgColor
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
         contentView.layer?.cornerRadius = Self.cornerRadius
         contentView.layer?.masksToBounds = true
 
