@@ -1087,7 +1087,7 @@ private final class ThreadMessageRowView: NSView {
     private let textView: ThreadMessageTextView
     private let replyControlGlassView = PassthroughGlassEffectView()
     private let replyControlContentView = NSView()
-    private let replyButton = NSButton()
+    private let replyButton = ReplyTextButton()
     private let messageField = NSTextField()
     private let sendButton = NSButton()
     private let closeButton = NSButton()
@@ -1190,22 +1190,9 @@ private final class ThreadMessageRowView: NSView {
 
             replyControlContentView.addSubview(replyButton)
             replyButton.translatesAutoresizingMaskIntoConstraints = false
-            replyButton.isBordered = false
-            replyButton.controlSize = .small
-            replyButton.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
-            replyButton.title = "Reply"
-            replyButton.attributedTitle = NSAttributedString(
-                string: "Reply",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
-                    .foregroundColor: NSColor.labelColor
-                ]
-            )
-            replyButton.image = NSImage(systemSymbolName: "arrowshape.turn.up.left.fill", accessibilityDescription: "Reply")
-            replyButton.imagePosition = .imageLeading
-            replyButton.contentTintColor = NSColor.labelColor
-            replyButton.target = self
-            replyButton.action = #selector(beginReply)
+            replyButton.onPress = { [weak self] in
+                self?.beginReply()
+            }
 
             replyControlContentView.addSubview(messageField)
             messageField.translatesAutoresizingMaskIntoConstraints = false
@@ -1345,6 +1332,46 @@ private final class ThreadMessageRowView: NSView {
             messageField.isHidden = true
             sendButton.isHidden = true
         }
+    }
+}
+
+private final class ReplyTextButton: NSView {
+    var onPress: (() -> Void)?
+
+    private let textField = NSTextField(labelWithString: "Reply")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        onPress?()
+    }
+
+    private func setupView() {
+        translatesAutoresizingMaskIntoConstraints = false
+        addSubview(textField)
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        textField.textColor = NSColor.labelColor
+        textField.alignment = .center
+        textField.lineBreakMode = .byClipping
+        textField.maximumNumberOfLines = 1
+
+        NSLayoutConstraint.activate([
+            textField.leadingAnchor.constraint(equalTo: leadingAnchor),
+            textField.trailingAnchor.constraint(equalTo: trailingAnchor),
+            textField.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
     }
 }
 
