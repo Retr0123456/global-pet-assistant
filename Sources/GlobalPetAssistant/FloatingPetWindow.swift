@@ -953,7 +953,7 @@ private enum ThreadGlassStyle {
     @MainActor static func configureReplyControl(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
         glassView.style = .regular
         glassView.cornerRadius = cornerRadius
-        glassView.tintColor = NSColor.controlAccentColor.withAlphaComponent(0.08)
+        glassView.tintColor = nil
     }
 }
 
@@ -1194,9 +1194,16 @@ private final class ThreadMessageRowView: NSView {
             replyButton.controlSize = .small
             replyButton.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
             replyButton.title = "Reply"
+            replyButton.attributedTitle = NSAttributedString(
+                string: "Reply",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                    .foregroundColor: NSColor.labelColor
+                ]
+            )
             replyButton.image = NSImage(systemSymbolName: "arrowshape.turn.up.left.fill", accessibilityDescription: "Reply")
             replyButton.imagePosition = .imageLeading
-            replyButton.contentTintColor = NSColor.controlAccentColor
+            replyButton.contentTintColor = NSColor.labelColor
             replyButton.target = self
             replyButton.action = #selector(beginReply)
 
