@@ -12,7 +12,8 @@ POST http://127.0.0.1:17321/terminal-plugin/events
 Authorization: Bearer <local app token>
 ```
 
-It does not require tmux and it does not modify unrelated shell config.
+It does not require tmux. The installer adds one guarded block to `~/.zshrc`
+so the plugin only loads inside kitty sessions.
 
 ## Install
 
@@ -22,13 +23,18 @@ From the repository root:
 examples/kitty-plugin/install.sh
 ```
 
-Then add this single line to the kitty zsh sessions where you want the plugin:
+The installer copies the plugin files and configures `~/.zshrc` automatically.
+Open a new kitty tab or run:
 
 ```zsh
-source "$HOME/.config/kitty/global-pet-assistant/shell-integration.zsh"
+source "$HOME/.zshrc"
 ```
 
-Open a new kitty tab or source the line manually in an existing tab.
+To install files without changing zsh config:
+
+```bash
+GPA_KITTY_PLUGIN_INSTALL_ZSHRC=0 examples/kitty-plugin/install.sh
+```
 
 ## Verify Flash
 
@@ -72,3 +78,6 @@ To remove the installed files:
 ```bash
 rm -rf "$HOME/.config/kitty/global-pet-assistant"
 ```
+
+Also remove the marked `global-pet-assistant kitty plugin` block from
+`~/.zshrc`.
