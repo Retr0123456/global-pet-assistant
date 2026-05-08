@@ -7,7 +7,12 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.0 - 2026-05-08
+
 - Added GUI pet switching from the menu bar and pet right-click menu, with the selected pet persisted across launches.
+- Added Codex session listening through the new `global-pet-agent-bridge`, Unix hook socket ingestion, `AgentRegistry`, Codex provider normalization, and long-lived agent thread panel rows.
+- Added bridge-backed Codex hook installation for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, and `Stop` while preserving unrelated user hooks.
+- Kept generic `LocalPetEvent` routing separate from coding-agent session identity, with Codex sessions projected back to pet animation state only through a one-way event projection.
 
 ## 0.3.4 - 2026-05-07
 
