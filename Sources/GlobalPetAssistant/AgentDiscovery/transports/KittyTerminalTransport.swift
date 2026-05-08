@@ -48,7 +48,7 @@ struct KittyTerminalTransport: TerminalTransport {
     func sendMessage(_ text: String, to context: TerminalSessionContext) async throws {
         let normalized = try normalizedMessage(text)
         let target = try resolver.resolve(context)
-        let result = try await runner.run(arguments: [
+        let textResult = try await runner.run(arguments: [
             "@",
             "--to",
             target.endpoint,
@@ -58,8 +58,22 @@ struct KittyTerminalTransport: TerminalTransport {
             normalized
         ])
 
-        guard result.exitCode == 0 else {
-            throw TerminalTransportError.commandFailed(exitCode: result.exitCode, stderr: result.stderr)
+        guard textResult.exitCode == 0 else {
+            throw TerminalTransportError.commandFailed(exitCode: textResult.exitCode, stderr: textResult.stderr)
+        }
+
+        let keyResult = try await runner.run(arguments: [
+            "@",
+            "--to",
+            target.endpoint,
+            "send-key",
+            "--match",
+            "id:\(target.windowId)",
+            "ENTER"
+        ])
+
+        guard keyResult.exitCode == 0 else {
+            throw TerminalTransportError.commandFailed(exitCode: keyResult.exitCode, stderr: keyResult.stderr)
         }
     }
 
@@ -71,6 +85,6 @@ struct KittyTerminalTransport: TerminalTransport {
         guard trimmed.count <= maximumMessageLength else {
             throw TerminalTransportError.invalidMessage("Message is too long.")
         }
-        return trimmed + "\n"
+        return trimmed
     }
 }

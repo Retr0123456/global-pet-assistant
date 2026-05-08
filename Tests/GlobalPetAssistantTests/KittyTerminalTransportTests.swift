@@ -79,15 +79,26 @@ struct KittyTerminalTransportTests {
         let runner = RecordingKittyRunner(result: RecordingKittyRunner.success)
         try await KittyTerminalTransport(runner: runner).sendMessage("continue", to: kittyContext())
 
-        #expect(await runner.arguments == [[
-            "@",
-            "--to",
-            "unix:/tmp/kitty",
-            "send-text",
-            "--match",
-            "id:42",
-            "continue\n"
-        ]])
+        #expect(await runner.arguments == [
+            [
+                "@",
+                "--to",
+                "unix:/tmp/kitty",
+                "send-text",
+                "--match",
+                "id:42",
+                "continue"
+            ],
+            [
+                "@",
+                "--to",
+                "unix:/tmp/kitty",
+                "send-key",
+                "--match",
+                "id:42",
+                "ENTER"
+            ]
+        ])
     }
 
     private func kittyContext() -> TerminalSessionContext {
