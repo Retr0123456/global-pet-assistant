@@ -172,6 +172,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onHealth: { [weak self] in
                 self?.eventRouter?.snapshot
             },
+            onTerminalPluginAgentObserved: { [weak self] event in
+                self?.agentDiscoveryService?.receiveTerminalPluginEvent(event)
+            },
             onEvent: { [weak self] event in
                 self?.acceptEvent(event) ?? event.resolvedPetState
             }

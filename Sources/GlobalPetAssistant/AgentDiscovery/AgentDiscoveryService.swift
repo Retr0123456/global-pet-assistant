@@ -7,6 +7,7 @@ final class AgentDiscoveryService {
 
     private let registry: AgentRegistry
     private let hookReceiver: HookEventReceiver
+    private let providers: [AgentKind: any AgentProvider]
     private var hookSocketServer: AgentHookSocketServer?
     private let onSnapshotChange: RegistrySnapshotHandler?
     private let onProjectedEvent: ProjectedEventHandler?
@@ -22,6 +23,7 @@ final class AgentDiscoveryService {
         onProjectedEvent: ProjectedEventHandler? = nil
     ) {
         self.registry = registry
+        self.providers = providers
         self.onSnapshotChange = onSnapshotChange
         self.onProjectedEvent = onProjectedEvent
         self.hookReceiver = HookEventReceiver(providers: providers) { [registry] update in
@@ -64,6 +66,22 @@ final class AgentDiscoveryService {
 
     func receiveHookEnvelope(_ envelope: AgentHookEnvelope) {
         hookReceiver.receive(envelope)
+        let snapshot = registry.snapshot
+        onSnapshotChange?(snapshot)
+        for session in snapshot.sessions {
+            onProjectedEvent?(AgentEventProjection.localEvent(for: session))
+        }
+    }
+
+    func receiveTerminalPluginEvent(_ event: TerminalPluginEvent) {
+        guard event.kind == .agentObserved,
+              let providerHint = event.providerHint,
+              let provider = providers[providerHint],
+              let update = provider.sessionUpdate(from: event) else {
+            return
+        }
+
+        registry.upsert(update)
         let snapshot = registry.snapshot
         onSnapshotChange?(snapshot)
         for session in snapshot.sessions {

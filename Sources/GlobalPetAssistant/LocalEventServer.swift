@@ -16,10 +16,14 @@ final class LocalEventServer {
     private let authorizationToken: String
     private let onEvent: @MainActor (LocalPetEvent) -> PetAnimationState
     private let onHealth: @MainActor () -> EventRouterSnapshot?
+    private let onTerminalPluginAgentObserved: @MainActor (TerminalPluginEvent) -> Void
     private lazy var terminalPluginReceiver = TerminalPluginEventReceiver(
         authorizationToken: authorizationToken,
         onFlashEvent: { [weak self] event in
             _ = self?.route(event)
+        },
+        onAgentObserved: { [weak self] event in
+            self?.routeTerminalPluginAgentObserved(event)
         }
     )
     private var socketFileDescriptor: Int32 = -1
@@ -32,6 +36,7 @@ final class LocalEventServer {
         configuration: AppConfiguration = .defaultConfiguration,
         authorizationToken: String,
         onHealth: @escaping @MainActor () -> EventRouterSnapshot? = { nil },
+        onTerminalPluginAgentObserved: @escaping @MainActor (TerminalPluginEvent) -> Void = { _ in },
         onEvent: @escaping @MainActor (LocalPetEvent) -> PetAnimationState
     ) {
         self.port = port
@@ -40,6 +45,7 @@ final class LocalEventServer {
         self.configuration = configuration
         self.authorizationToken = authorizationToken
         self.onHealth = onHealth
+        self.onTerminalPluginAgentObserved = onTerminalPluginAgentObserved
         self.onEvent = onEvent
     }
 
@@ -325,6 +331,15 @@ final class LocalEventServer {
 
         semaphore.wait()
         return box.snapshot
+    }
+
+    private func routeTerminalPluginAgentObserved(_ event: TerminalPluginEvent) {
+        let semaphore = DispatchSemaphore(value: 0)
+        Task { @MainActor in
+            self.onTerminalPluginAgentObserved(event)
+            semaphore.signal()
+        }
+        semaphore.wait()
     }
 
     private func isAuthorized(_ request: LocalHTTPRequest) -> Bool {

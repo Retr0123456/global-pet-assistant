@@ -55,6 +55,41 @@ struct CodexProvider: AgentProvider {
         )
     }
 
+    func sessionUpdate(from terminalEvent: TerminalPluginEvent) -> AgentSessionUpdate? {
+        guard terminalEvent.providerHint == .codex else {
+            return nil
+        }
+
+        let sessionKey = [
+            terminalEvent.terminal.sessionId,
+            terminalEvent.terminal.windowId ?? "",
+            terminalEvent.terminal.cwd ?? ""
+        ].joined(separator: "|")
+        let sessionID = "terminal-\(Self.stableHash(sessionKey))"
+        var metadata: [String: JSONValue] = [
+            "identity_source": .string("terminal_plugin"),
+            "terminal_kind": .string(terminalEvent.terminal.kind.rawValue),
+            "terminal_session_id": .string(terminalEvent.terminal.sessionId)
+        ]
+        metadata["terminal_window_id"] = terminalEvent.terminal.windowId.map { .string($0) }
+        metadata["terminal_tab_id"] = terminalEvent.terminal.tabId.map { .string($0) }
+        metadata["terminal_control_endpoint"] = terminalEvent.terminal.controlEndpoint.map { .string($0) }
+
+        let status: AgentStatus = terminalEvent.exitCode.map { $0 == 0 ? .completed : .failed } ?? .running
+        return AgentSessionUpdate(
+            id: sessionID,
+            kind: .codex,
+            status: status,
+            controlRoutes: [.terminalPlugin: [.observe, .sendMessage]],
+            observedAt: terminalEvent.occurredAt,
+            sourceStrength: .terminalPlugin,
+            cwd: terminalEvent.terminal.cwd,
+            title: status == .completed ? "Codex completed" : "Codex session",
+            message: terminalEvent.command,
+            metadata: metadata
+        )
+    }
+
     private func canonicalSessionID(envelope: AgentHookEnvelope) -> String {
         if let parentThreadID = parentThreadID(envelope.rawPayload) {
             return parentThreadID
