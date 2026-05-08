@@ -48,6 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.onThreadDismiss = { [weak self] thread in
                 self?.dismissThread(thread)
             }
+            window.onAgentMessageSubmit = { [weak self] thread, message in
+                self?.sendAgentMessage(message, to: thread)
+            }
             window.onFocusTimerCancel = { [weak self] in
                 self?.cancelFocusTimer()
             }
@@ -218,6 +221,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             eventRouter?.clearSource(thread.source)
         case .agent:
             agentDiscoveryService?.archiveSession(id: thread.id)
+        }
+    }
+
+    private func sendAgentMessage(_ message: String, to thread: ThreadDisplayRow) {
+        guard thread.kind == .agent,
+              let session = agentDiscoveryService?.session(id: thread.id) else {
+            return
+        }
+
+        Task {
+            do {
+                let control = TerminalPluginAgentControl(terminalTransport: try KittyTerminalTransport())
+                try await control.sendMessage(message, to: session)
+            } catch {
+                await MainActor.run {
+                    _ = self.acceptEvent(LocalPetEvent(
+                        source: "agent-control:\(thread.id)",
+                        type: "flash",
+                        level: .danger,
+                        message: "Message send failed",
+                        state: .failed,
+                        ttlMs: 4_500,
+                        transient: true
+                    ))
+                    AuditLogger.appendRuntime(status: "agent_message_send_failed", message: String(describing: error))
+                }
+            }
         }
     }
 

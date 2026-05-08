@@ -49,6 +49,15 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
+    var onAgentMessageSubmit: ((ThreadDisplayRow, String) -> Void)? {
+        get {
+            petContentView.onAgentMessageSubmit
+        }
+        set {
+            petContentView.onAgentMessageSubmit = newValue
+        }
+    }
+
     var onFocusTimerCancel: (() -> Void)? {
         get {
             petContentView.onFocusTimerCancel
@@ -224,6 +233,7 @@ final class PetWindowContentView: NSView {
     private static let threadPanelMaxWidth: CGFloat = 300
     private static let threadPanelMinHeight: CGFloat = 78
     private static let threadRowHeight: CGFloat = 78
+    private static let threadSendMessageRowHeight: CGFloat = 118
     private static let threadPanelVerticalInset: CGFloat = 0
     private static let threadStackSpacing: CGFloat = 8
     private static let threadPanelGap: CGFloat = 8
@@ -239,6 +249,7 @@ final class PetWindowContentView: NSView {
     var onDragChanged: ((PetDragDirection?) -> Void)?
     var onThreadClick: ((ThreadDisplayRow) -> Void)?
     var onThreadDismiss: ((ThreadDisplayRow) -> Void)?
+    var onAgentMessageSubmit: ((ThreadDisplayRow, String) -> Void)?
     var onFocusTimerCancel: (() -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
@@ -660,9 +671,12 @@ final class PetWindowContentView: NSView {
             },
             onDismiss: { [weak self] thread in
                 self?.onThreadDismiss?(thread)
+            },
+            onSendMessage: { [weak self] thread, message in
+                self?.onAgentMessageSubmit?(thread, message)
             }
         )
-        row.heightAnchor.constraint(equalToConstant: Self.threadRowHeight).isActive = true
+        row.heightAnchor.constraint(equalToConstant: rowHeight(for: thread)).isActive = true
         row.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth).isActive = true
 
         return row
@@ -677,11 +691,18 @@ final class PetWindowContentView: NSView {
             return Self.threadPanelMinHeight
         }
 
-        let threadCount = max(threadSnapshot?.displayRows.count ?? 0, 1)
-        let rowsHeight = CGFloat(threadCount) * Self.threadRowHeight
+        let rows = threadSnapshot?.displayRows ?? []
+        let threadCount = max(rows.count, 1)
+        let rowsHeight = rows.isEmpty
+            ? Self.threadRowHeight
+            : rows.reduce(CGFloat(0)) { $0 + rowHeight(for: $1) }
         let spacingHeight = CGFloat(max(threadCount - 1, 0)) * Self.threadStackSpacing
         let contentHeight = Self.threadPanelVerticalInset * 2 + rowsHeight + spacingHeight
         return max(Self.threadPanelMinHeight, contentHeight)
+    }
+
+    private func rowHeight(for thread: ThreadDisplayRow) -> CGFloat {
+        thread.canSendMessage ? Self.threadSendMessageRowHeight : Self.threadRowHeight
     }
 
     private var flashStackHeight: CGFloat {
@@ -1051,25 +1072,31 @@ private final class ThreadMessageRowView: NSView {
     private static let closeButtonSize: CGFloat = 18
     private static let actionReserveWidth: CGFloat = 28
     private static let fixedHeight: CGFloat = 78
+    private static let sendFieldHeight: CGFloat = 28
 
     private let thread: ThreadDisplayRow
     private let onOpen: (ThreadDisplayRow) -> Void
     private let onDismiss: (ThreadDisplayRow) -> Void
+    private let onSendMessage: (ThreadDisplayRow, String) -> Void
     private let glassView: PassthroughGlassEffectView
     private let contentView = ThreadRowContentView()
     private let statusBadgeView: ThreadStatusBadgeView
     private let textView: ThreadMessageTextView
+    private let messageField = NSTextField()
+    private let sendButton = NSButton()
     private let closeButton = NSButton()
     private var hoverTrackingArea: NSTrackingArea?
 
     init(
         thread: ThreadDisplayRow,
         onOpen: @escaping (ThreadDisplayRow) -> Void,
-        onDismiss: @escaping (ThreadDisplayRow) -> Void
+        onDismiss: @escaping (ThreadDisplayRow) -> Void,
+        onSendMessage: @escaping (ThreadDisplayRow, String) -> Void
     ) {
         self.thread = thread
         self.onOpen = onOpen
         self.onDismiss = onDismiss
+        self.onSendMessage = onSendMessage
         self.glassView = PassthroughGlassEffectView()
         self.statusBadgeView = ThreadStatusBadgeView(status: thread.status)
         self.textView = ThreadMessageTextView(thread: thread)
@@ -1082,7 +1109,7 @@ private final class ThreadMessageRowView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: Self.fixedHeight)
+        NSSize(width: NSView.noIntrinsicMetric, height: thread.canSendMessage ? 118 : Self.fixedHeight)
     }
 
     override func updateTrackingAreas() {
@@ -1138,6 +1165,27 @@ private final class ThreadMessageRowView: NSView {
         contentView.addSubview(textView)
         textView.translatesAutoresizingMaskIntoConstraints = false
 
+        if thread.canSendMessage {
+            contentView.addSubview(messageField)
+            messageField.translatesAutoresizingMaskIntoConstraints = false
+            messageField.placeholderString = "Message"
+            messageField.font = NSFont.systemFont(ofSize: 12, weight: .regular)
+            messageField.lineBreakMode = .byTruncatingTail
+            messageField.target = self
+            messageField.action = #selector(sendMessage)
+
+            contentView.addSubview(sendButton)
+            sendButton.translatesAutoresizingMaskIntoConstraints = false
+            sendButton.isBordered = false
+            sendButton.image = NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: "Send message")
+            sendButton.imagePosition = .imageOnly
+            sendButton.imageScaling = .scaleProportionallyDown
+            sendButton.contentTintColor = NSColor.controlAccentColor
+            sendButton.target = self
+            sendButton.action = #selector(sendMessage)
+            sendButton.setButtonType(.momentaryPushIn)
+        }
+
         contentView.addSubview(closeButton)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.isHidden = true
@@ -1177,12 +1225,38 @@ private final class ThreadMessageRowView: NSView {
             textView.leadingAnchor.constraint(equalTo: statusBadgeView.trailingAnchor, constant: 12),
             textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Self.actionReserveWidth),
             textView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            textView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            textView.bottomAnchor.constraint(
+                equalTo: thread.canSendMessage ? messageField.topAnchor : contentView.bottomAnchor,
+                constant: thread.canSendMessage ? -4 : 0
+            )
         ])
+
+        if thread.canSendMessage {
+            NSLayoutConstraint.activate([
+                messageField.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
+                messageField.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -6),
+                messageField.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
+                messageField.heightAnchor.constraint(equalToConstant: Self.sendFieldHeight),
+
+                sendButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+                sendButton.centerYAnchor.constraint(equalTo: messageField.centerYAnchor),
+                sendButton.widthAnchor.constraint(equalToConstant: 24),
+                sendButton.heightAnchor.constraint(equalToConstant: 24)
+            ])
+        }
     }
 
     @objc private func dismissNotification() {
         onDismiss(thread)
+    }
+
+    @objc private func sendMessage() {
+        let message = messageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else {
+            return
+        }
+        messageField.stringValue = ""
+        onSendMessage(thread, message)
     }
 }
 

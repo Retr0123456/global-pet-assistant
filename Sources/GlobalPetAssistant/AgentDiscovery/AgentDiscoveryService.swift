@@ -35,6 +35,10 @@ final class AgentDiscoveryService {
         registry.snapshot
     }
 
+    func session(id: String) -> AgentSession? {
+        registry.session(id: id)
+    }
+
     func archiveSession(id: String) {
         registry.archive(id: id)
         onSnapshotChange?(registry.snapshot)

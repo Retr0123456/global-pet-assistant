@@ -16,6 +16,7 @@ struct ThreadDisplayRow: Equatable, Identifiable {
     let action: LocalPetAction?
     let state: PetAnimationState
     let status: PetThreadStatus
+    let canSendMessage: Bool
 
     init(generic thread: PetThreadSnapshot) {
         self.id = thread.source
@@ -28,6 +29,7 @@ struct ThreadDisplayRow: Equatable, Identifiable {
         self.action = thread.action
         self.state = thread.state
         self.status = thread.status
+        self.canSendMessage = false
     }
 
     init(agent thread: AgentThreadSnapshot) {
@@ -41,6 +43,7 @@ struct ThreadDisplayRow: Equatable, Identifiable {
         self.action = nil
         self.state = Self.state(for: thread.status)
         self.status = thread.status
+        self.canSendMessage = thread.capabilities.contains(.sendMessage)
     }
 
     private static func state(for status: PetThreadStatus) -> PetAnimationState {

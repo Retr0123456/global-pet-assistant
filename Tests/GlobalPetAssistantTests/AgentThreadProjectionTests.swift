@@ -65,6 +65,22 @@ struct AgentThreadProjectionTests {
         #expect(panel.displayRows.map(\.kind) == [.agent, .generic])
     }
 
+    @Test
+    func terminalPluginSendMessageCapabilityIsExposedToThreadRows() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let agent = AgentSession(
+            id: "codex-session",
+            kind: .codex,
+            controlRoutes: [.terminalPlugin: [.observe, .sendMessage]],
+            status: .running,
+            createdAt: now,
+            lastSeenAt: now
+        )
+        let row = ThreadDisplayRow(agent: AgentThreadProjection.snapshot(for: agent))
+
+        #expect(row.canSendMessage == true)
+    }
+
     private func session(
         id: String,
         status: AgentStatus,
