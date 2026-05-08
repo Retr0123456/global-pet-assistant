@@ -26,13 +26,7 @@ final class PetSpriteView: NSView {
         ))
 
         wantsLayer = true
-        layer?.backgroundColor = NSColor.clear.cgColor
-        spriteLayer.frame = bounds
-        spriteLayer.contents = atlas.image
-        spriteLayer.contentsGravity = .resizeAspect
-        spriteLayer.magnificationFilter = .nearest
-        spriteLayer.minificationFilter = .nearest
-        layer?.addSublayer(spriteLayer)
+        configureSpriteLayer()
     }
 
     required init?(coder: NSCoder) {
@@ -43,8 +37,21 @@ final class PetSpriteView: NSView {
         Self.displaySize
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        configureSpriteLayer()
+        renderCurrentFrame()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        configureSpriteLayer()
+        renderCurrentFrame()
+    }
+
     override func layout() {
         super.layout()
+        configureSpriteLayer()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         spriteLayer.frame = bounds
@@ -77,7 +84,7 @@ final class PetSpriteView: NSView {
             return
         }
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Self.framesPerSecond, repeats: true) { [weak self] _ in
+        timer = makeTimer(interval: 1.0 / Self.framesPerSecond, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.advanceFrame()
             }
@@ -94,10 +101,7 @@ final class PetSpriteView: NSView {
         renderCurrentFrame()
 
         guard currentFrames.count > 1, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-            timer = Timer.scheduledTimer(
-                withTimeInterval: Self.reducedMotionFrameHoldDuration,
-                repeats: false
-            ) { [weak self] _ in
+            timer = makeTimer(interval: Self.reducedMotionFrameHoldDuration, repeats: false) { [weak self] _ in
                 Task { @MainActor in
                     guard let self, self.playbackGeneration == generation else {
                         return
@@ -110,7 +114,7 @@ final class PetSpriteView: NSView {
             return
         }
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Self.framesPerSecond, repeats: true) { [weak self] _ in
+        timer = makeTimer(interval: 1.0 / Self.framesPerSecond, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.advanceOneShotFrame(generation: generation, completion: completion)
             }
@@ -159,9 +163,45 @@ final class PetSpriteView: NSView {
             return
         }
 
+        configureSpriteLayer()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         spriteLayer.contentsRect = currentFrames[frameIndex].contentsRect
         CATransaction.commit()
+    }
+
+    private func configureSpriteLayer() {
+        wantsLayer = true
+        guard let rootLayer = layer else {
+            return
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        rootLayer.backgroundColor = NSColor.clear.cgColor
+        rootLayer.masksToBounds = false
+        spriteLayer.frame = bounds
+        spriteLayer.contents = atlas.image
+        spriteLayer.contentsGravity = .resizeAspect
+        spriteLayer.contentsScale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        spriteLayer.magnificationFilter = .nearest
+        spriteLayer.minificationFilter = .nearest
+        spriteLayer.masksToBounds = false
+
+        if spriteLayer.superlayer !== rootLayer {
+            spriteLayer.removeFromSuperlayer()
+            rootLayer.addSublayer(spriteLayer)
+        }
+        CATransaction.commit()
+    }
+
+    private func makeTimer(
+        interval: TimeInterval,
+        repeats: Bool,
+        block: @escaping @Sendable (Timer) -> Void
+    ) -> Timer {
+        let timer = Timer(timeInterval: interval, repeats: repeats, block: block)
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
     }
 }
