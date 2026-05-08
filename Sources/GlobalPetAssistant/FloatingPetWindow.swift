@@ -112,7 +112,7 @@ final class FloatingPetWindow: NSPanel {
     }
 
     override var canBecomeKey: Bool {
-        false
+        true
     }
 
     func show() {
@@ -233,7 +233,6 @@ final class PetWindowContentView: NSView {
     private static let threadPanelMaxWidth: CGFloat = 300
     private static let threadPanelMinHeight: CGFloat = 78
     private static let threadRowHeight: CGFloat = 78
-    private static let threadSendMessageRowHeight: CGFloat = 118
     private static let threadPanelVerticalInset: CGFloat = 0
     private static let threadStackSpacing: CGFloat = 8
     private static let threadPanelGap: CGFloat = 8
@@ -676,7 +675,7 @@ final class PetWindowContentView: NSView {
                 self?.onAgentMessageSubmit?(thread, message)
             }
         )
-        row.heightAnchor.constraint(equalToConstant: rowHeight(for: thread)).isActive = true
+        row.heightAnchor.constraint(equalToConstant: Self.threadRowHeight).isActive = true
         row.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth).isActive = true
 
         return row
@@ -693,16 +692,10 @@ final class PetWindowContentView: NSView {
 
         let rows = threadSnapshot?.displayRows ?? []
         let threadCount = max(rows.count, 1)
-        let rowsHeight = rows.isEmpty
-            ? Self.threadRowHeight
-            : rows.reduce(CGFloat(0)) { $0 + rowHeight(for: $1) }
+        let rowsHeight = CGFloat(threadCount) * Self.threadRowHeight
         let spacingHeight = CGFloat(max(threadCount - 1, 0)) * Self.threadStackSpacing
         let contentHeight = Self.threadPanelVerticalInset * 2 + rowsHeight + spacingHeight
         return max(Self.threadPanelMinHeight, contentHeight)
-    }
-
-    private func rowHeight(for thread: ThreadDisplayRow) -> CGFloat {
-        thread.canSendMessage ? Self.threadSendMessageRowHeight : Self.threadRowHeight
     }
 
     private var flashStackHeight: CGFloat {
@@ -1072,7 +1065,8 @@ private final class ThreadMessageRowView: NSView {
     private static let closeButtonSize: CGFloat = 18
     private static let actionReserveWidth: CGFloat = 28
     private static let fixedHeight: CGFloat = 78
-    private static let sendFieldHeight: CGFloat = 28
+    private static let replyOverlayRadius: CGFloat = 8
+    private static let replyControlHeight: CGFloat = 30
 
     private let thread: ThreadDisplayRow
     private let onOpen: (ThreadDisplayRow) -> Void
@@ -1082,10 +1076,13 @@ private final class ThreadMessageRowView: NSView {
     private let contentView = ThreadRowContentView()
     private let statusBadgeView: ThreadStatusBadgeView
     private let textView: ThreadMessageTextView
+    private let replyOverlayView = NSView()
+    private let replyButton = NSButton()
     private let messageField = NSTextField()
     private let sendButton = NSButton()
     private let closeButton = NSButton()
     private var hoverTrackingArea: NSTrackingArea?
+    private var isReplying = false
 
     init(
         thread: ThreadDisplayRow,
@@ -1109,7 +1106,7 @@ private final class ThreadMessageRowView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: thread.canSendMessage ? 118 : Self.fixedHeight)
+        NSSize(width: NSView.noIntrinsicMetric, height: Self.fixedHeight)
     }
 
     override func updateTrackingAreas() {
@@ -1131,10 +1128,16 @@ private final class ThreadMessageRowView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         closeButton.isHidden = false
+        if thread.canSendMessage, !isReplying {
+            setReplyOverlayVisible(true)
+        }
     }
 
     override func mouseExited(with event: NSEvent) {
         closeButton.isHidden = true
+        if !isReplying {
+            setReplyOverlayVisible(false)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -1166,15 +1169,37 @@ private final class ThreadMessageRowView: NSView {
         textView.translatesAutoresizingMaskIntoConstraints = false
 
         if thread.canSendMessage {
-            contentView.addSubview(messageField)
+            contentView.addSubview(replyOverlayView)
+            replyOverlayView.translatesAutoresizingMaskIntoConstraints = false
+            replyOverlayView.wantsLayer = true
+            replyOverlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.68).cgColor
+            replyOverlayView.layer?.cornerRadius = Self.replyOverlayRadius
+            replyOverlayView.layer?.borderWidth = 1
+            replyOverlayView.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+            replyOverlayView.isHidden = true
+
+            replyOverlayView.addSubview(replyButton)
+            replyButton.translatesAutoresizingMaskIntoConstraints = false
+            replyButton.bezelStyle = .rounded
+            replyButton.controlSize = .small
+            replyButton.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+            replyButton.title = "Reply"
+            replyButton.image = NSImage(systemSymbolName: "arrowshape.turn.up.left.fill", accessibilityDescription: "Reply")
+            replyButton.imagePosition = .imageLeading
+            replyButton.contentTintColor = NSColor.controlAccentColor
+            replyButton.target = self
+            replyButton.action = #selector(beginReply)
+
+            replyOverlayView.addSubview(messageField)
             messageField.translatesAutoresizingMaskIntoConstraints = false
             messageField.placeholderString = "Message"
             messageField.font = NSFont.systemFont(ofSize: 12, weight: .regular)
             messageField.lineBreakMode = .byTruncatingTail
             messageField.target = self
             messageField.action = #selector(sendMessage)
+            messageField.isHidden = true
 
-            contentView.addSubview(sendButton)
+            replyOverlayView.addSubview(sendButton)
             sendButton.translatesAutoresizingMaskIntoConstraints = false
             sendButton.isBordered = false
             sendButton.image = NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: "Send message")
@@ -1184,6 +1209,7 @@ private final class ThreadMessageRowView: NSView {
             sendButton.target = self
             sendButton.action = #selector(sendMessage)
             sendButton.setButtonType(.momentaryPushIn)
+            sendButton.isHidden = true
         }
 
         contentView.addSubview(closeButton)
@@ -1225,20 +1251,26 @@ private final class ThreadMessageRowView: NSView {
             textView.leadingAnchor.constraint(equalTo: statusBadgeView.trailingAnchor, constant: 12),
             textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Self.actionReserveWidth),
             textView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            textView.bottomAnchor.constraint(
-                equalTo: thread.canSendMessage ? messageField.topAnchor : contentView.bottomAnchor,
-                constant: thread.canSendMessage ? -4 : 0
-            )
+            textView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
 
         if thread.canSendMessage {
             NSLayoutConstraint.activate([
-                messageField.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
-                messageField.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -6),
-                messageField.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
-                messageField.heightAnchor.constraint(equalToConstant: Self.sendFieldHeight),
+                replyOverlayView.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
+                replyOverlayView.trailingAnchor.constraint(equalTo: textView.trailingAnchor),
+                replyOverlayView.topAnchor.constraint(equalTo: textView.topAnchor, constant: 10),
+                replyOverlayView.bottomAnchor.constraint(equalTo: textView.bottomAnchor, constant: -10),
 
-                sendButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+                replyButton.centerXAnchor.constraint(equalTo: replyOverlayView.centerXAnchor),
+                replyButton.centerYAnchor.constraint(equalTo: replyOverlayView.centerYAnchor),
+                replyButton.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
+
+                messageField.leadingAnchor.constraint(equalTo: replyOverlayView.leadingAnchor, constant: 10),
+                messageField.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -6),
+                messageField.centerYAnchor.constraint(equalTo: replyOverlayView.centerYAnchor),
+                messageField.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
+
+                sendButton.trailingAnchor.constraint(equalTo: replyOverlayView.trailingAnchor, constant: -8),
                 sendButton.centerYAnchor.constraint(equalTo: messageField.centerYAnchor),
                 sendButton.widthAnchor.constraint(equalToConstant: 24),
                 sendButton.heightAnchor.constraint(equalToConstant: 24)
@@ -1250,13 +1282,40 @@ private final class ThreadMessageRowView: NSView {
         onDismiss(thread)
     }
 
+    @objc private func beginReply() {
+        isReplying = true
+        setReplyOverlayVisible(true)
+        replyButton.isHidden = true
+        messageField.isHidden = false
+        sendButton.isHidden = false
+        window?.makeKey()
+        window?.makeFirstResponder(messageField)
+    }
+
     @objc private func sendMessage() {
         let message = messageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else {
             return
         }
         messageField.stringValue = ""
+        isReplying = false
+        messageField.isHidden = true
+        sendButton.isHidden = true
+        replyButton.isHidden = false
+        setReplyOverlayVisible(false)
         onSendMessage(thread, message)
+    }
+
+    private func setReplyOverlayVisible(_ isVisible: Bool) {
+        guard thread.canSendMessage else {
+            return
+        }
+        replyOverlayView.isHidden = !isVisible
+        if isVisible, !isReplying {
+            replyButton.isHidden = false
+            messageField.isHidden = true
+            sendButton.isHidden = true
+        }
     }
 }
 
@@ -1266,7 +1325,8 @@ private final class ThreadRowContentView: NSView {
             return nil
         }
 
-        if hitView.isDescendant(ofType: NSButton.self) {
+        if hitView.isDescendant(ofType: NSButton.self)
+            || hitView.isDescendant(ofType: NSTextField.self) {
             return hitView
         }
 
