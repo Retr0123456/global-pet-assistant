@@ -26,7 +26,7 @@ struct TerminalCommandFlashProjectionTests {
 
     @Test
     func ignoresNoisyCommands() {
-        for command in ["cd", "ls", "pwd", "git status"] {
+        for command in ["cd", "cd Sources", "ls", "ls -la", "pwd", "git status", "git status -sb", "git diff --stat"] {
             let event = commandEvent(command: command, exitCode: 0, durationMs: 10_000)
             #expect(TerminalCommandFlashProjection().localEvent(for: event) == nil)
         }

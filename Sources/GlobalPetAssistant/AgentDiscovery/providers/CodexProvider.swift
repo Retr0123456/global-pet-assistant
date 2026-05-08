@@ -76,9 +76,7 @@ struct CodexProvider: AgentProvider {
         metadata["terminal_control_endpoint"] = terminalEvent.terminal.controlEndpoint.map { .string($0) }
 
         let status: AgentStatus = terminalEvent.exitCode.map { $0 == 0 ? .completed : .failed } ?? .running
-        let terminalCapabilities: Set<AgentCapability> = terminalEvent.terminal.controlEndpoint == nil
-            ? [.observe]
-            : [.observe, .sendMessage]
+        let terminalCapabilities = terminalPluginCapabilities(for: terminalEvent.terminal)
         return AgentSessionUpdate(
             id: sessionID,
             kind: .codex,
@@ -91,6 +89,15 @@ struct CodexProvider: AgentProvider {
             message: terminalEvent.command,
             metadata: metadata
         )
+    }
+
+    private func terminalPluginCapabilities(for context: TerminalSessionContext) -> Set<AgentCapability> {
+        do {
+            _ = try KittyTargetResolver().resolve(context)
+            return [.observe, .sendMessage]
+        } catch {
+            return [.observe]
+        }
     }
 
     private func canonicalSessionID(envelope: AgentHookEnvelope) -> String {

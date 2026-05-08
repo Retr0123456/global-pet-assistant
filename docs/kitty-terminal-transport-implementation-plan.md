@@ -88,7 +88,7 @@ Sources/GlobalPetAssistant/AgentDiscovery/transports/
 Sources/GlobalPetAssistant/AgentDiscovery/sources/
   TerminalPluginSource.swift
 
-examples/kitty-plugin/
+plugins/kitty/
   README.md
   global_pet_assistant.py
   install.sh
@@ -400,7 +400,7 @@ Acceptance criteria:
 
 Tasks:
 
-- Add `examples/kitty-plugin/README.md`.
+- Add `plugins/kitty/README.md`.
 - Add a minimal plugin/kitten prototype.
 - Emit `command-started` and `command-completed` events.
 - Include kitty window id and cwd.
@@ -474,7 +474,7 @@ swift run petctl flash --source terminal --level success --message "terminal fla
 After the plugin prototype exists:
 
 ```bash
-examples/kitty-plugin/install.sh
+plugins/kitty/install.sh
 ```
 
 Then verify:

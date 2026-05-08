@@ -7,6 +7,12 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.1 - 2026-05-09
+
+- Moved the structured kitty integration into `plugins/kitty` as a first-class plugin.
+- Added kitty plugin installation for local remote control, clean-install preflight warnings, and release-bundled plugin/helper assets.
+- Hardened kitty terminal plugin event handling so command flash quota does not starve Codex observations, noisy shell commands are ignored more consistently, and reply controls require a valid local kitty target.
+
 ## 0.4.0 - 2026-05-08
 
 - Added GUI pet switching from the menu bar and pet right-click menu, with the selected pet persisted across launches.

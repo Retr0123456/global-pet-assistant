@@ -121,25 +121,38 @@ swift run petctl notify \
 curl -fsS http://127.0.0.1:17321/healthz
 ```
 
-Kitty manual command flash:
+Preferred structured kitty plugin from a source checkout:
 
 ```bash
-Tools/install-kitty-command-hook.sh
+plugins/kitty/install.sh
 ```
 
-Preferred structured kitty plugin:
+Preferred structured kitty plugin from an installed release app:
 
 ```bash
-examples/kitty-plugin/install.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
 ```
 
 The plugin posts structured terminal events to
 `/terminal-plugin/events`, can emit command completion flash events, and provides
-automatic Codex session start/end observations for `codex` and `cdx`. It also
-provides the `gpa-codex` compatibility wrapper. See
-[`examples/kitty-plugin/README.md`](examples/kitty-plugin/README.md).
-The installer copies the plugin files and adds an idempotent guarded block to
-`~/.zshrc`; open a new kitty tab/window after running it.
+terminal-observed Codex process start/end observations for `codex` and `cdx`.
+It also provides the `gpa-codex` compatibility wrapper. See
+[`plugins/kitty/README.md`](plugins/kitty/README.md). The installer copies the
+plugin files, adds an idempotent guarded block to `~/.zshrc`, and adds a
+managed include to `~/.config/kitty/kitty.conf` for local kitty remote control.
+Open a new kitty tab/window for command flash, and fully restart kitty after the
+first install so reply/send-message can use the local control socket.
+
+Launch Global Pet Assistant once before verifying the plugin. First launch
+creates `~/.global-pet-assistant/token`, which the plugin uses for local
+authentication. Install Codex hooks as well when you want prompt/tool/waiting
+lifecycle updates instead of only terminal process observations.
+
+Legacy kitty manual command flash compatibility hook:
+
+```bash
+Tools/install-kitty-command-hook.sh
+```
 
 The installer copies `examples/hooks/kitty-command-flash.zsh` to
 `~/.global-pet-assistant/hooks/` and adds a guarded source block to `~/.zshrc`.
@@ -198,6 +211,12 @@ To enable them for every Codex session on this machine:
 
 ```bash
 Tools/install-codex-hooks.sh
+```
+
+If you installed from a release app instead of a source checkout:
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
 ```
 
 This installs a user-level hook under `~/.codex/`, so sessions launched from
@@ -342,10 +361,12 @@ ditto GlobalPetAssistant.app /Applications/GlobalPetAssistant.app
 open /Applications/GlobalPetAssistant.app
 ```
 
-`petctl` currently runs from a source checkout:
+Release apps include helper binaries under
+`GlobalPetAssistant.app/Contents/Resources/bin`. From a source checkout, keep
+using `swift run petctl`; from an installed release app, use the bundled helper:
 
 ```bash
-swift run petctl notify --level success --title "Installed app is reachable"
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl notify --level success --title "Installed app is reachable"
 ```
 
 ## Upgrade

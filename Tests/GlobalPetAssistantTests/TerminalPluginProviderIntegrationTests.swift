@@ -43,6 +43,19 @@ struct TerminalPluginProviderIntegrationTests {
     }
 
     @Test
+    func codexTerminalEventWithInvalidControlEndpointCannotSendMessage() {
+        let service = AgentDiscoveryService()
+        var event = codexTerminalEvent(exitCode: nil)
+        event.terminal.controlEndpoint = "tcp:192.168.1.2:5000"
+
+        service.receiveTerminalPluginEvent(event)
+
+        let session = service.snapshot.sessions.first
+        #expect(session?.controlRoutes[.terminalPlugin] == [.observe])
+        #expect(session?.capabilities.contains(.sendMessage) == false)
+    }
+
+    @Test
     func codexTerminalEventCanMarkSessionCompleted() {
         let service = AgentDiscoveryService()
 

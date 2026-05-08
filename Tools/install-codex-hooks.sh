@@ -5,11 +5,27 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 CONFIG_FILE="$CODEX_HOME/config.toml"
 HOOKS_FILE="$CODEX_HOME/hooks.json"
-BRIDGE_PATH="${GLOBAL_PET_AGENT_BRIDGE:-$ROOT_DIR/.build/debug/global-pet-agent-bridge}"
+BUNDLED_BRIDGE="$ROOT_DIR/bin/global-pet-agent-bridge"
+SOURCE_BRIDGE="$ROOT_DIR/.build/debug/global-pet-agent-bridge"
+INSTALLED_APP_BRIDGE="/Applications/GlobalPetAssistant.app/Contents/Resources/bin/global-pet-agent-bridge"
+
+if [[ -n "${GLOBAL_PET_AGENT_BRIDGE:-}" ]]; then
+  BRIDGE_PATH="$GLOBAL_PET_AGENT_BRIDGE"
+elif [[ -x "$BUNDLED_BRIDGE" ]]; then
+  BRIDGE_PATH="$BUNDLED_BRIDGE"
+elif [[ -x "$INSTALLED_APP_BRIDGE" ]]; then
+  BRIDGE_PATH="$INSTALLED_APP_BRIDGE"
+else
+  BRIDGE_PATH="$SOURCE_BRIDGE"
+fi
 
 mkdir -p "$CODEX_HOME"
 
 if [[ ! -x "$BRIDGE_PATH" ]]; then
+  if [[ ! -f "$ROOT_DIR/Package.swift" ]]; then
+    echo "global-pet-agent-bridge was not found. Install GlobalPetAssistant.app or set GLOBAL_PET_AGENT_BRIDGE." >&2
+    exit 1
+  fi
   swift build --package-path "$ROOT_DIR" --product global-pet-agent-bridge >/dev/null
 fi
 

@@ -30,7 +30,11 @@ def token() -> str:
 
 def terminal_context(args: argparse.Namespace) -> dict[str, object]:
     window_id = args.window_id or os.environ.get("KITTY_WINDOW_ID")
-    listen_on = args.control_endpoint or os.environ.get("KITTY_LISTEN_ON")
+    listen_on = (
+        args.control_endpoint
+        or os.environ.get("KITTY_LISTEN_ON")
+        or os.environ.get("GPA_KITTY_CONTROL_ENDPOINT")
+    )
     session_id = args.session_id or (f"kitty-{window_id}" if window_id else f"kitty-{os.getpid()}")
     return {
         "kind": "kitty",
@@ -87,7 +91,7 @@ def emit(args: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--endpoint", default=os.environ.get("GPA_TERMINAL_PLUGIN_ENDPOINT", DEFAULT_ENDPOINT))
-    parser.add_argument("--timeout", type=float, default=2.0)
+    parser.add_argument("--timeout", type=float, default=float(os.environ.get("GPA_KITTY_PLUGIN_TIMEOUT", "0.8")))
     parser.add_argument("--kind", choices=["command-started", "command-completed", "agent-observed"], required=True)
     parser.add_argument("--command")
     parser.add_argument("--exit-code", type=int)

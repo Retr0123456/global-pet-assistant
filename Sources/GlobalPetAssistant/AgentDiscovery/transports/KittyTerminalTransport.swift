@@ -82,6 +82,9 @@ struct KittyTerminalTransport: TerminalTransport {
         guard !trimmed.isEmpty else {
             throw TerminalTransportError.invalidMessage("Message is empty.")
         }
+        guard trimmed.rangeOfCharacter(from: .newlines) == nil else {
+            throw TerminalTransportError.invalidMessage("Message must be a single line.")
+        }
         guard trimmed.count <= maximumMessageLength else {
             throw TerminalTransportError.invalidMessage("Message is too long.")
         }

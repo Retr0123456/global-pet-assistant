@@ -179,7 +179,7 @@ final class ActionHandler {
             }
 
             guard let listenOn = action.kittyListenOn?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  listenOn.hasPrefix("unix:") || listenOn.hasPrefix("tcp:")
+                  Self.isLocalKittyListenOn(listenOn)
             else {
                 throw ActionValidationError.invalidKittyListenOn(action.kittyListenOn ?? "")
             }
@@ -196,6 +196,12 @@ final class ActionHandler {
         }
 
         return scheme == "http" || scheme == "https"
+    }
+
+    private static func isLocalKittyListenOn(_ listenOn: String) -> Bool {
+        listenOn.hasPrefix("unix:")
+            || listenOn.hasPrefix("tcp:127.0.0.1:")
+            || listenOn.hasPrefix("tcp:localhost:")
     }
 
     private static func isAllowedURL(_ components: URLComponents, policy: SourceActionPolicy) -> Bool {

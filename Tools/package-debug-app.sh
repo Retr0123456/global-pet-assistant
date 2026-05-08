@@ -7,17 +7,27 @@ cd "$ROOT_DIR"
 SWIFT_BUILD_FLAGS="${SWIFT_BUILD_FLAGS:-}"
 
 swift build ${SWIFT_BUILD_FLAGS}
+swift build ${SWIFT_BUILD_FLAGS} --product petctl
+swift build ${SWIFT_BUILD_FLAGS} --product global-pet-agent-bridge
 
 BIN_DIR="$(swift build ${SWIFT_BUILD_FLAGS} --show-bin-path)"
 APP_PATH="$ROOT_DIR/.build/GlobalPetAssistant.app"
 EXECUTABLE="$BIN_DIR/GlobalPetAssistant"
 RESOURCE_BUNDLE="$BIN_DIR/GlobalPetAssistant_GlobalPetAssistant.bundle"
 APP_ICON="$ROOT_DIR/Assets/AppIcon/AppIcon.icns"
+PETCTL_EXECUTABLE="$BIN_DIR/petctl"
+AGENT_BRIDGE_EXECUTABLE="$BIN_DIR/global-pet-agent-bridge"
 
 rm -rf "$APP_PATH"
-mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
+mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources/bin" "$APP_PATH/Contents/Resources/Tools"
 
 cp "$EXECUTABLE" "$APP_PATH/Contents/MacOS/GlobalPetAssistant"
+cp "$PETCTL_EXECUTABLE" "$APP_PATH/Contents/Resources/bin/petctl"
+cp "$AGENT_BRIDGE_EXECUTABLE" "$APP_PATH/Contents/Resources/bin/global-pet-agent-bridge"
+cp "$ROOT_DIR/Tools/install-codex-hooks.sh" "$APP_PATH/Contents/Resources/Tools/install-codex-hooks.sh"
+cp "$ROOT_DIR/Tools/verify-kitty-plugin.sh" "$APP_PATH/Contents/Resources/Tools/verify-kitty-plugin.sh"
+mkdir -p "$APP_PATH/Contents/Resources/plugins"
+cp -R "$ROOT_DIR/plugins/kitty" "$APP_PATH/Contents/Resources/plugins/kitty"
 
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
   cp -R "$RESOURCE_BUNDLE" "$APP_PATH/Contents/Resources/GlobalPetAssistant_GlobalPetAssistant.bundle"
@@ -43,9 +53,9 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.4.0</string>
+  <string>0.4.1</string>
   <key>CFBundleVersion</key>
-  <string>9</string>
+  <string>10</string>
   <key>LSMinimumSystemVersion</key>
   <string>26.0</string>
   <key>LSUIElement</key>

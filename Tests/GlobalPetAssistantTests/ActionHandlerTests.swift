@@ -188,6 +188,21 @@ struct ActionHandlerTests {
     }
 
     @Test
+    func testRejectsNonLocalKittyListenOn() {
+        #expect(throws: ActionValidationError.self) {
+            try ActionHandler.validate(
+                LocalPetAction(
+                    type: "focus_kitty_window",
+                    kittyWindowId: "42",
+                    kittyListenOn: "tcp:192.168.1.2:5000"
+                ),
+                source: "codex-cli",
+                configuration: configuration
+            )
+        }
+    }
+
+    @Test
     func testFocusesKittyWindowWithExpectedRemoteControlArguments() {
         var capturedArguments: [String] = []
         let handler = ActionHandler(runKittyRemoteControl: { arguments in

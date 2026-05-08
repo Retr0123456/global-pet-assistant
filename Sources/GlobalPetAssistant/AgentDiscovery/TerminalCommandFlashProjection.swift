@@ -11,6 +11,13 @@ struct TerminalCommandFlashProjection {
         "jobs"
     ]
 
+    private static let ignoredGitSubcommands: Set<String> = [
+        "status",
+        "diff",
+        "log",
+        "branch"
+    ]
+
     var minimumSuccessDurationMs = 2_000
     var ttlMs = 4_500
 
@@ -48,11 +55,33 @@ struct TerminalCommandFlashProjection {
     }
 
     private func isIgnored(_ command: String) -> Bool {
-        let normalized = command
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-        return Self.ignoredCommands.contains(normalized)
+        let words = firstCommandSegment(command)
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+        guard let firstWord = words.first else {
+            return true
+        }
+        if Self.ignoredCommands.contains(firstWord) {
+            return true
+        }
+        if firstWord == "git",
+           words.count >= 2,
+           Self.ignoredGitSubcommands.contains(words[1]) {
+            return true
+        }
+        return false
+    }
+
+    private func firstCommandSegment(_ command: String) -> String {
+        var segment = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        for separator in [";", "|", "&"] {
+            segment = String(segment.split(
+                separator: Character(separator),
+                maxSplits: 1,
+                omittingEmptySubsequences: false
+            ).first ?? "")
+        }
+        return segment.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func commandLabel(_ command: String) -> String {

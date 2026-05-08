@@ -53,6 +53,12 @@ Codex user level:
 Tools/install-codex-hooks.sh
 ```
 
+If you installed from the release app:
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
+```
+
 This writes `~/.codex/hooks.json` with an absolute bridge path, preserves
 unrelated hook entries, updates this project's managed entries idempotently, and ensures
 `~/.codex/config.toml` contains:

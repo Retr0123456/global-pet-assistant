@@ -59,7 +59,7 @@ struct TerminalPluginEventReceiverTests {
     func rateLimitedCommandEventsAreRejected() throws {
         var now = Date(timeIntervalSince1970: 1_000)
         let limiter = SourceRateLimiter(
-            policies: ["terminal-plugin:kitty": SourceRateLimiter.Policy(maxEvents: 1, windowMs: 1_000)],
+            policies: ["terminal-plugin:kitty:command-completed": SourceRateLimiter.Policy(maxEvents: 1, windowMs: 1_000)],
             defaultPolicy: SourceRateLimiter.Policy(maxEvents: 10, windowMs: 1_000),
             now: { now }
         )
@@ -79,6 +79,37 @@ struct TerminalPluginEventReceiverTests {
         try receiver.receive(data: validEventData(), authorizationHeader: "Bearer secret")
     }
 
+    @Test
+    func commandQuotaDoesNotStarveAgentObservationQuota() throws {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let limiter = SourceRateLimiter(
+            policies: [
+                "terminal-plugin:kitty:command-completed": SourceRateLimiter.Policy(maxEvents: 1, windowMs: 1_000),
+                "terminal-plugin:kitty:agent-observed": SourceRateLimiter.Policy(maxEvents: 1, windowMs: 1_000)
+            ],
+            defaultPolicy: SourceRateLimiter.Policy(maxEvents: 10, windowMs: 1_000),
+            now: { now }
+        )
+        var observed: [TerminalPluginEvent] = []
+        let receiver = TerminalPluginEventReceiver(
+            authorizationToken: "secret",
+            rateLimiter: limiter,
+            onFlashEvent: { _ in },
+            onAgentObserved: { observed.append($0) }
+        )
+
+        try receiver.receive(data: validEventData(), authorizationHeader: "Bearer secret")
+        #expect(throws: TerminalPluginEventReceiverError.rateLimited(retryAfterMs: 1_000)) {
+            try receiver.receive(data: validEventData(), authorizationHeader: "Bearer secret")
+        }
+
+        try receiver.receive(data: agentObservedEventData(), authorizationHeader: "Bearer secret")
+        #expect(observed.count == 1)
+
+        now = now.addingTimeInterval(1)
+        try receiver.receive(data: validEventData(), authorizationHeader: "Bearer secret")
+    }
+
     private func validEventData() -> Data {
         Data("""
         {
@@ -93,6 +124,25 @@ struct TerminalPluginEventReceiverTests {
           "command": "swift test",
           "exitCode": 0,
           "durationMs": 2500,
+          "occurredAt": 1000
+        }
+        """.utf8)
+    }
+
+    private func agentObservedEventData() -> Data {
+        Data("""
+        {
+          "schemaVersion": 1,
+          "kind": "agent-observed",
+          "terminal": {
+            "kind": "kitty",
+            "sessionId": "kitty-42",
+            "windowId": "42",
+            "cwd": "/tmp/project",
+            "controlEndpoint": "unix:/tmp/kitty"
+          },
+          "command": "codex",
+          "providerHint": "codex",
           "occurredAt": 1000
         }
         """.utf8)

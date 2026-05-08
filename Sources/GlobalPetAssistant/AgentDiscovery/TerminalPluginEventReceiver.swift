@@ -20,7 +20,11 @@ final class TerminalPluginEventReceiver {
     init(
         authorizationToken: String,
         rateLimiter: SourceRateLimiter = SourceRateLimiter(
-            policies: ["terminal-plugin": SourceRateLimiter.Policy(maxEvents: 40, windowMs: 60_000)]
+            policies: [
+                "terminal-plugin:kitty:agent-observed": SourceRateLimiter.Policy(maxEvents: 120, windowMs: 60_000),
+                "terminal-plugin:kitty:command-completed": SourceRateLimiter.Policy(maxEvents: 40, windowMs: 60_000),
+                "terminal-plugin:kitty:command-started": SourceRateLimiter.Policy(maxEvents: 40, windowMs: 60_000)
+            ]
         ),
         flashProjection: TerminalCommandFlashProjection = TerminalCommandFlashProjection(),
         onFlashEvent: @escaping (LocalPetEvent) -> Void,
@@ -52,7 +56,7 @@ final class TerminalPluginEventReceiver {
             throw TerminalPluginEventReceiverError.malformedEvent
         }
 
-        let source = "terminal-plugin:\(event.terminal.kind.rawValue)"
+        let source = "terminal-plugin:\(event.terminal.kind.rawValue):\(event.kind.rawValue)"
         if let rejection = rateLimiter.record(source: source) {
             throw TerminalPluginEventReceiverError.rateLimited(retryAfterMs: rejection.retryAfterMs)
         }
