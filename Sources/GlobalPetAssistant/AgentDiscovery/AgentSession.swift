@@ -85,6 +85,7 @@ enum AgentKind: String, Codable, Equatable, Sendable {
 
 enum AgentControlTransportKind: String, Codable, Equatable, Hashable, Sendable {
     case agentAppServer = "agent-app-server"
+    case terminalPlugin = "terminal-plugin"
     case tmux
 }
 
@@ -108,6 +109,7 @@ enum AgentCapability: String, Codable, Equatable, Hashable, Sendable {
 enum AgentSignalStrength: Int, Codable, Comparable, Sendable {
     case workspaceMarker = 10
     case terminalScan = 20
+    case terminalPlugin = 25
     case processScan = 30
     case tmuxScan = 40
     case rolloutJSONL = 50
