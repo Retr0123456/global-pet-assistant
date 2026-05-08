@@ -30,6 +30,19 @@ struct TerminalPluginProviderIntegrationTests {
     }
 
     @Test
+    func codexTerminalEventWithoutControlEndpointCannotSendMessage() {
+        let service = AgentDiscoveryService()
+        var event = codexTerminalEvent(exitCode: nil)
+        event.terminal.controlEndpoint = nil
+
+        service.receiveTerminalPluginEvent(event)
+
+        let session = service.snapshot.sessions.first
+        #expect(session?.controlRoutes[.terminalPlugin] == [.observe])
+        #expect(session?.capabilities.contains(.sendMessage) == false)
+    }
+
+    @Test
     func codexTerminalEventCanMarkSessionCompleted() {
         let service = AgentDiscoveryService()
 

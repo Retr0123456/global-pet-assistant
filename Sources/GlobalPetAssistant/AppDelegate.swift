@@ -232,8 +232,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         Task {
             do {
+                AuditLogger.appendRuntime(status: "agent_message_send_started", message: thread.id)
                 let control = TerminalPluginAgentControl(terminalTransport: try KittyTerminalTransport())
                 try await control.sendMessage(message, to: session)
+                await MainActor.run {
+                    _ = self.acceptEvent(LocalPetEvent(
+                        source: "agent-control:\(thread.id)",
+                        type: "flash",
+                        level: .success,
+                        message: "Message sent",
+                        state: .review,
+                        ttlMs: 2_500,
+                        transient: true
+                    ))
+                    AuditLogger.appendRuntime(status: "agent_message_send_succeeded", message: thread.id)
+                }
             } catch {
                 await MainActor.run {
                     _ = self.acceptEvent(LocalPetEvent(

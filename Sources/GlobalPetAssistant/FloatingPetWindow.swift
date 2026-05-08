@@ -949,6 +949,12 @@ private enum ThreadGlassStyle {
         glassView.cornerRadius = cornerRadius
         glassView.tintColor = nil
     }
+
+    @MainActor static func configureReplyControl(_ glassView: NSGlassEffectView, cornerRadius: CGFloat) {
+        glassView.style = .regular
+        glassView.cornerRadius = cornerRadius
+        glassView.tintColor = NSColor.controlAccentColor.withAlphaComponent(0.08)
+    }
 }
 
 private final class PassthroughGlassEffectView: NSGlassEffectView {
@@ -957,7 +963,8 @@ private final class PassthroughGlassEffectView: NSGlassEffectView {
             return nil
         }
 
-        if hitView.isDescendant(ofType: NSButton.self) {
+        if hitView.isDescendant(ofType: NSButton.self)
+            || hitView.isDescendant(ofType: NSTextField.self) {
             return hitView
         }
 
@@ -1065,8 +1072,10 @@ private final class ThreadMessageRowView: NSView {
     private static let closeButtonSize: CGFloat = 18
     private static let actionReserveWidth: CGFloat = 28
     private static let fixedHeight: CGFloat = 78
-    private static let replyOverlayRadius: CGFloat = 8
-    private static let replyControlHeight: CGFloat = 30
+    private static let replyControlRadius: CGFloat = 12
+    private static let replyControlHeight: CGFloat = 34
+    private static let replyButtonWidth: CGFloat = 96
+    private static let replyInputWidth: CGFloat = 218
 
     private let thread: ThreadDisplayRow
     private let onOpen: (ThreadDisplayRow) -> Void
@@ -1076,12 +1085,14 @@ private final class ThreadMessageRowView: NSView {
     private let contentView = ThreadRowContentView()
     private let statusBadgeView: ThreadStatusBadgeView
     private let textView: ThreadMessageTextView
-    private let replyOverlayView = NSView()
+    private let replyControlGlassView = PassthroughGlassEffectView()
+    private let replyControlContentView = NSView()
     private let replyButton = NSButton()
     private let messageField = NSTextField()
     private let sendButton = NSButton()
     private let closeButton = NSButton()
     private var hoverTrackingArea: NSTrackingArea?
+    private var replyControlWidthConstraint: NSLayoutConstraint?
     private var isReplying = false
 
     init(
@@ -1169,18 +1180,17 @@ private final class ThreadMessageRowView: NSView {
         textView.translatesAutoresizingMaskIntoConstraints = false
 
         if thread.canSendMessage {
-            contentView.addSubview(replyOverlayView)
-            replyOverlayView.translatesAutoresizingMaskIntoConstraints = false
-            replyOverlayView.wantsLayer = true
-            replyOverlayView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.68).cgColor
-            replyOverlayView.layer?.cornerRadius = Self.replyOverlayRadius
-            replyOverlayView.layer?.borderWidth = 1
-            replyOverlayView.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
-            replyOverlayView.isHidden = true
+            contentView.addSubview(replyControlGlassView)
+            replyControlGlassView.translatesAutoresizingMaskIntoConstraints = false
+            ThreadGlassStyle.configureReplyControl(replyControlGlassView, cornerRadius: Self.replyControlRadius)
+            replyControlGlassView.contentView = replyControlContentView
+            replyControlGlassView.isHidden = true
 
-            replyOverlayView.addSubview(replyButton)
+            replyControlContentView.translatesAutoresizingMaskIntoConstraints = false
+
+            replyControlContentView.addSubview(replyButton)
             replyButton.translatesAutoresizingMaskIntoConstraints = false
-            replyButton.bezelStyle = .rounded
+            replyButton.isBordered = false
             replyButton.controlSize = .small
             replyButton.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
             replyButton.title = "Reply"
@@ -1190,16 +1200,18 @@ private final class ThreadMessageRowView: NSView {
             replyButton.target = self
             replyButton.action = #selector(beginReply)
 
-            replyOverlayView.addSubview(messageField)
+            replyControlContentView.addSubview(messageField)
             messageField.translatesAutoresizingMaskIntoConstraints = false
             messageField.placeholderString = "Message"
             messageField.font = NSFont.systemFont(ofSize: 12, weight: .regular)
             messageField.lineBreakMode = .byTruncatingTail
+            messageField.isBordered = false
+            messageField.drawsBackground = false
             messageField.target = self
             messageField.action = #selector(sendMessage)
             messageField.isHidden = true
 
-            replyOverlayView.addSubview(sendButton)
+            replyControlContentView.addSubview(sendButton)
             sendButton.translatesAutoresizingMaskIntoConstraints = false
             sendButton.isBordered = false
             sendButton.image = NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: "Send message")
@@ -1255,22 +1267,29 @@ private final class ThreadMessageRowView: NSView {
         ])
 
         if thread.canSendMessage {
+            let widthConstraint = replyControlGlassView.widthAnchor.constraint(equalToConstant: Self.replyButtonWidth)
+            replyControlWidthConstraint = widthConstraint
             NSLayoutConstraint.activate([
-                replyOverlayView.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
-                replyOverlayView.trailingAnchor.constraint(equalTo: textView.trailingAnchor),
-                replyOverlayView.topAnchor.constraint(equalTo: textView.topAnchor, constant: 10),
-                replyOverlayView.bottomAnchor.constraint(equalTo: textView.bottomAnchor, constant: -10),
+                replyControlGlassView.trailingAnchor.constraint(equalTo: textView.trailingAnchor),
+                replyControlGlassView.bottomAnchor.constraint(equalTo: textView.bottomAnchor, constant: -8),
+                widthConstraint,
+                replyControlGlassView.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
 
-                replyButton.centerXAnchor.constraint(equalTo: replyOverlayView.centerXAnchor),
-                replyButton.centerYAnchor.constraint(equalTo: replyOverlayView.centerYAnchor),
-                replyButton.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
+                replyControlContentView.leadingAnchor.constraint(equalTo: replyControlGlassView.leadingAnchor),
+                replyControlContentView.trailingAnchor.constraint(equalTo: replyControlGlassView.trailingAnchor),
+                replyControlContentView.topAnchor.constraint(equalTo: replyControlGlassView.topAnchor),
+                replyControlContentView.bottomAnchor.constraint(equalTo: replyControlGlassView.bottomAnchor),
 
-                messageField.leadingAnchor.constraint(equalTo: replyOverlayView.leadingAnchor, constant: 10),
+                replyButton.leadingAnchor.constraint(equalTo: replyControlContentView.leadingAnchor),
+                replyButton.trailingAnchor.constraint(equalTo: replyControlContentView.trailingAnchor),
+                replyButton.topAnchor.constraint(equalTo: replyControlContentView.topAnchor),
+                replyButton.bottomAnchor.constraint(equalTo: replyControlContentView.bottomAnchor),
+
+                messageField.leadingAnchor.constraint(equalTo: replyControlContentView.leadingAnchor, constant: 10),
                 messageField.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -6),
-                messageField.centerYAnchor.constraint(equalTo: replyOverlayView.centerYAnchor),
-                messageField.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
+                messageField.centerYAnchor.constraint(equalTo: replyControlContentView.centerYAnchor),
 
-                sendButton.trailingAnchor.constraint(equalTo: replyOverlayView.trailingAnchor, constant: -8),
+                sendButton.trailingAnchor.constraint(equalTo: replyControlContentView.trailingAnchor, constant: -8),
                 sendButton.centerYAnchor.constraint(equalTo: messageField.centerYAnchor),
                 sendButton.widthAnchor.constraint(equalToConstant: 24),
                 sendButton.heightAnchor.constraint(equalToConstant: 24)
@@ -1285,10 +1304,11 @@ private final class ThreadMessageRowView: NSView {
     @objc private func beginReply() {
         isReplying = true
         setReplyOverlayVisible(true)
+        replyControlWidthConstraint?.constant = Self.replyInputWidth
         replyButton.isHidden = true
         messageField.isHidden = false
         sendButton.isHidden = false
-        window?.makeKey()
+        window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(messageField)
     }
 
@@ -1299,6 +1319,7 @@ private final class ThreadMessageRowView: NSView {
         }
         messageField.stringValue = ""
         isReplying = false
+        replyControlWidthConstraint?.constant = Self.replyButtonWidth
         messageField.isHidden = true
         sendButton.isHidden = true
         replyButton.isHidden = false
@@ -1310,8 +1331,9 @@ private final class ThreadMessageRowView: NSView {
         guard thread.canSendMessage else {
             return
         }
-        replyOverlayView.isHidden = !isVisible
+        replyControlGlassView.isHidden = !isVisible
         if isVisible, !isReplying {
+            replyControlWidthConstraint?.constant = Self.replyButtonWidth
             replyButton.isHidden = false
             messageField.isHidden = true
             sendButton.isHidden = true

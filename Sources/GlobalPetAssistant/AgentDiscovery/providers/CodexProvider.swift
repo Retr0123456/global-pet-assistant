@@ -76,11 +76,14 @@ struct CodexProvider: AgentProvider {
         metadata["terminal_control_endpoint"] = terminalEvent.terminal.controlEndpoint.map { .string($0) }
 
         let status: AgentStatus = terminalEvent.exitCode.map { $0 == 0 ? .completed : .failed } ?? .running
+        let terminalCapabilities: Set<AgentCapability> = terminalEvent.terminal.controlEndpoint == nil
+            ? [.observe]
+            : [.observe, .sendMessage]
         return AgentSessionUpdate(
             id: sessionID,
             kind: .codex,
             status: status,
-            controlRoutes: [.terminalPlugin: [.observe, .sendMessage]],
+            controlRoutes: [.terminalPlugin: terminalCapabilities],
             observedAt: terminalEvent.occurredAt,
             sourceStrength: .terminalPlugin,
             cwd: terminalEvent.terminal.cwd,
