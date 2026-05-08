@@ -1172,6 +1172,10 @@ private final class ThreadMessageRowView: NSView {
         glassView.contentView = contentView
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.18).cgColor
+        contentView.layer?.cornerRadius = Self.cornerRadius
+        contentView.layer?.masksToBounds = true
 
         contentView.addSubview(statusBadgeView)
         statusBadgeView.translatesAutoresizingMaskIntoConstraints = false
