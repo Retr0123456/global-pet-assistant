@@ -55,8 +55,10 @@ such as `cd`, `ls`, `pwd`, and `git status` are ignored.
 
 ## Codex Session Events
 
-The integration defines a `gpa-codex` wrapper. Use it instead of `codex` when
-you want the kitty plugin to emit Codex session start and end events:
+The integration automatically emits Codex session start and end observations
+when a kitty shell runs `codex` or `cdx`.
+
+It also defines a compatibility `gpa-codex` wrapper:
 
 ```zsh
 gpa-codex

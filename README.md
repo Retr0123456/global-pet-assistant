@@ -135,7 +135,8 @@ examples/kitty-plugin/install.sh
 
 The plugin posts structured terminal events to
 `/terminal-plugin/events`, can emit command completion flash events, and provides
-the `gpa-codex` wrapper for Codex session start/end observations. See
+automatic Codex session start/end observations for `codex` and `cdx`. It also
+provides the `gpa-codex` compatibility wrapper. See
 [`examples/kitty-plugin/README.md`](examples/kitty-plugin/README.md).
 The installer copies the plugin files and adds an idempotent guarded block to
 `~/.zshrc`; open a new kitty tab/window after running it.
