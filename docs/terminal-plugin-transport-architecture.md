@@ -25,14 +25,14 @@ Coding agents are still identified by providers such as `CodexProvider` and
 ## Architecture
 
 ```text
-Kitty plugin / kitten
+Kitty watcher / plugin
   -> TerminalPluginEventReceiver
   -> TerminalCommandFlashProjection
   -> LocalPetEvent
   -> EventRouter
   -> pet flash
 
-Kitty plugin / kitten
+Kitty watcher / plugin
   -> TerminalPluginEventReceiver
   -> AgentDiscoveryService
   -> AgentProvider

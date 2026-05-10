@@ -121,32 +121,64 @@ swift run petctl notify \
 curl -fsS http://127.0.0.1:17321/healthz
 ```
 
-Preferred structured kitty plugin from a source checkout:
+## Kitty Plugin Install
+
+The preferred kitty integration is a kitty global watcher. It observes shell
+command start/end events, posts structured terminal events to
+`/terminal-plugin/events`, can emit command completion flash events, and provides
+terminal-observed Codex process start/end observations for `codex` and `cdx`.
+
+Before installing:
+
+1. Install and launch kitty.
+2. Launch Global Pet Assistant once so it creates
+   `~/.global-pet-assistant/token`.
+3. Make sure the app is reachable:
+
+```bash
+curl -fsS http://127.0.0.1:17321/healthz
+```
+
+Install from a source checkout:
 
 ```bash
 plugins/kitty/install.sh
 ```
 
-Preferred structured kitty plugin from an installed release app:
+Install from an installed release app:
 
 ```bash
 /Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
 ```
 
-The plugin posts structured terminal events to
-`/terminal-plugin/events`, can emit command completion flash events, and provides
-terminal-observed Codex process start/end observations for `codex` and `cdx`.
-It also provides the `gpa-codex` compatibility wrapper. See
-[`plugins/kitty/README.md`](plugins/kitty/README.md). The installer copies the
-plugin files, adds an idempotent guarded block to `~/.zshrc`, and adds a
-managed include to `~/.config/kitty/kitty.conf` for local kitty remote control.
-Open a new kitty tab/window for command flash, and fully restart kitty after the
-first install so reply/send-message can use the local control socket.
+The installer copies plugin files into
+`~/.config/kitty/global-pet-assistant/` and adds a managed include to
+`~/.config/kitty/kitty.conf`. That include enables:
 
-Launch Global Pet Assistant once before verifying the plugin. First launch
-creates `~/.global-pet-assistant/token`, which the plugin uses for local
-authentication. Install Codex hooks as well when you want prompt/tool/waiting
-lifecycle updates instead of only terminal process observations.
+- `watcher ~/.config/kitty/global-pet-assistant/global_pet_assistant_watcher.py`
+- `allow_remote_control socket-only`
+- `listen_on unix:~/.config/kitty/global-pet-assistant/kitty.sock`
+
+Fully quit and reopen kitty after the first install. Then verify command flash:
+
+```bash
+sleep 3
+false
+```
+
+Both commands should produce short pet flash events when Global Pet Assistant is
+running. Low-noise commands such as `cd`, `ls`, `pwd`, and `git status` are
+ignored by the app projection.
+
+Install Codex hooks as well when you want prompt/tool/waiting lifecycle updates
+instead of only terminal process observations:
+
+```bash
+Tools/install-codex-hooks.sh
+```
+
+See [`plugins/kitty/README.md`](plugins/kitty/README.md) for disable,
+uninstall, and legacy zsh compatibility options.
 
 Legacy kitty manual command flash compatibility hook:
 

@@ -91,6 +91,7 @@ Sources/GlobalPetAssistant/AgentDiscovery/sources/
 plugins/kitty/
   README.md
   global_pet_assistant.py
+  global_pet_assistant_watcher.py
   install.sh
 
 Tests/GlobalPetAssistantTests/
@@ -198,7 +199,9 @@ Non-responsibilities:
 
 ## Kitty Plugin Plan
 
-The kitty plugin should become the structured terminal-side source of truth.
+The kitty plugin should become the structured terminal-side source of truth. The
+main integration path is a kitty global watcher; the zsh hook remains only a
+compatibility fallback.
 
 ### Plugin Responsibilities
 
