@@ -45,10 +45,10 @@ Use this checklist before making the repository public.
 
 - [x] Decide public bundle identifier ownership.
 - [x] Decide whether release builds are ad-hoc signed, Developer ID signed, or notarized.
-- [x] Package script emits a SHA-256 checksum for downloadable archives.
+- [x] Package script emits SHA-256 checksums for downloadable DMG and zip artifacts.
 - [x] Add install, upgrade, and uninstall instructions for public users.
 
 Initial release decision: keep `io.github.globalpetassistant.GlobalPetAssistant`
-as the public bundle identifier, ship repository-built archives as ad-hoc signed
-local beta artifacts, and require Developer ID signing plus notarization before
-recommending downloadable public end-user releases.
+as the public bundle identifier, ship repository-built DMG and zip archives as
+ad-hoc signed local beta artifacts, and require Developer ID signing plus
+notarization before recommending downloadable public end-user releases.

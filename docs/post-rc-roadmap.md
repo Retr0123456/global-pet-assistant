@@ -228,7 +228,7 @@ What to do:
 
 Options:
 
-- Keep local-only: `.zip` release artifact plus checksum.
+- Keep local-only: drag-install `.dmg` and `.zip` release artifacts plus checksums.
 - Public/private distribution: Developer ID signing and notarization.
 - Developer install convenience: Homebrew tap or `install.sh`.
 
@@ -239,13 +239,15 @@ Concrete local-only target:
 ```text
 .build/release/GlobalPetAssistant.zip
 .build/release/GlobalPetAssistant.zip.sha256
+.build/release/GlobalPetAssistant.dmg
+.build/release/GlobalPetAssistant.dmg.sha256
 ```
 
 Acceptance:
 
-- `Tools/package-release-app.sh` emits a SHA-256 checksum.
+- `Tools/package-release-app.sh` emits SHA-256 checksums for the DMG and zip.
 - README has install, upgrade, and uninstall steps.
-- Release artifact can be smoke-tested after unzipping.
+- Release artifact can be smoke-tested after opening the DMG or unzipping.
 
 ## Priority 7: Optional Product Expansion
 

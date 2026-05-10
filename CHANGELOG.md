@@ -7,6 +7,8 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+- Added drag-install DMG generation to the release packaging script while keeping the existing zip artifact.
+
 ## 0.4.2 - 2026-05-10
 
 - Fixed expanded thread panel placement near screen corners so the panel follows the pet's screen quadrant without pulling the pet away from the dragged position.

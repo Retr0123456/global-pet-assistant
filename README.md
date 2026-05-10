@@ -10,7 +10,7 @@ The project goal is to separate the pet into two layers:
 ## Status
 
 - Public source beta for macOS 26 and the AppKit Liquid Glass SDK.
-- No notarized downloadable release is published yet; build from source or package a local beta from this checkout.
+- No notarized downloadable release is published yet; release builds can be packaged as a drag-install DMG or zip from this checkout.
 - The event API is local-only. Mutating writes require a bearer token generated on first app launch.
 - Blobbit, an original generated default pet, is bundled and installed into the app-owned pet folder on first launch. Users can import compatible local pet packages.
 
@@ -328,11 +328,12 @@ Tools/package-debug-app.sh
 open .build/GlobalPetAssistant.app
 ```
 
-Build an ad-hoc signed release `.app` zip and checksum:
+Build an ad-hoc signed release `.app`, drag-install DMG, zip, and checksums:
 
 ```bash
 Tools/package-release-app.sh
 open .build/release/GlobalPetAssistant.app
+open .build/release/GlobalPetAssistant.dmg
 ```
 
 In restricted agent sandboxes where SwiftPM's own sandbox cannot start, set:
@@ -343,13 +344,26 @@ SWIFT_BUILD_FLAGS=--disable-sandbox Tools/package-release-app.sh
 
 ## Install
 
-Local beta install from a built checkout:
+Local beta GUI install from a built checkout:
 
 ```bash
 Tools/package-release-app.sh
-ditto .build/release/GlobalPetAssistant.app /Applications/GlobalPetAssistant.app
+shasum -a 256 -c .build/release/GlobalPetAssistant.dmg.sha256
+open .build/release/GlobalPetAssistant.dmg
+```
+
+Then drag `GlobalPetAssistant.app` onto `Applications` in the Finder window and launch it:
+
+```bash
 open /Applications/GlobalPetAssistant.app
 curl -fsS http://127.0.0.1:17321/healthz
+```
+
+If installing from a release DMG:
+
+```bash
+shasum -a 256 -c GlobalPetAssistant.dmg.sha256
+open GlobalPetAssistant.dmg
 ```
 
 If installing from a release zip:
@@ -422,10 +436,10 @@ installed app with macOS Login Items; disabling it removes that registration.
 ## Release Identity
 
 - Bundle identifier: `io.github.globalpetassistant.GlobalPetAssistant`.
-- Current package script: ad-hoc signed local beta zip.
+- Current package script: ad-hoc signed local beta DMG and zip.
 - Public downloadable releases should use Developer ID signing and notarization.
-- `Tools/package-release-app.sh` writes `GlobalPetAssistant.zip.sha256` next to
-  the release zip.
+- `Tools/package-release-app.sh` writes `GlobalPetAssistant.dmg.sha256` and
+  `GlobalPetAssistant.zip.sha256` next to the release artifacts.
 
 Regenerate the app icon from `Assets/AppIcon/AppIcon.png`:
 
