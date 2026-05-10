@@ -145,9 +145,12 @@ final class FloatingPetWindow: NSPanel {
         let nextOriginX = petContentView.preservesRightEdgeOnResize
             ? frame.maxX - desiredSize.width
             : frame.minX
+        let nextOriginY = petContentView.preservesTopEdgeOnResize
+            ? frame.maxY - desiredSize.height
+            : frame.minY
         let nextFrame = NSRect(
             x: nextOriginX,
-            y: frame.maxY - desiredSize.height,
+            y: nextOriginY,
             width: desiredSize.width,
             height: desiredSize.height
         )
@@ -230,6 +233,16 @@ final class FloatingPetWindow: NSPanel {
 }
 
 final class PetWindowContentView: NSView {
+    private enum HorizontalPlacement {
+        case leading
+        case trailing
+    }
+
+    private enum ThreadPanelVerticalPlacement {
+        case abovePet
+        case belowPet
+    }
+
     private static let threadPanelMaxWidth: CGFloat = 300
     private static let threadPanelMinHeight: CGFloat = 78
     private static let threadRowHeight: CGFloat = 78
@@ -254,7 +267,10 @@ final class PetWindowContentView: NSView {
     var contextMenuProvider: (() -> NSMenu?)?
     var onDesiredSizeChanged: (() -> Void)?
     var preservesRightEdgeOnResize: Bool {
-        !hasSideStack || isFlashPlacedLeft
+        horizontalPlacement == .trailing
+    }
+    var preservesTopEdgeOnResize: Bool {
+        threadPanelVerticalPlacement == .belowPet
     }
 
     var desiredContentSize: NSSize {
@@ -280,12 +296,19 @@ final class PetWindowContentView: NSView {
     private let threadStackView = NSStackView()
     private let flashStackView = NSStackView()
     private var threadPanelHeightConstraint: NSLayoutConstraint?
+    private var petTopConstraint: NSLayoutConstraint?
+    private var petBelowThreadPanelConstraint: NSLayoutConstraint?
     private var petLeadingConstraint: NSLayoutConstraint?
     private var petTrailingConstraint: NSLayoutConstraint?
+    private var threadPanelTopConstraint: NSLayoutConstraint?
+    private var threadPanelBelowPetConstraint: NSLayoutConstraint?
+    private var threadPanelLeadingConstraint: NSLayoutConstraint?
+    private var threadPanelTrailingConstraint: NSLayoutConstraint?
     private var flashLeadingConstraint: NSLayoutConstraint?
     private var flashTrailingConstraint: NSLayoutConstraint?
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
+    private var mouseDownPetScreenOrigin: NSPoint?
     private var didMouseDownOnPet = false
     private var didDrag = false
     private let clickMovementThreshold: CGFloat = 5
@@ -294,7 +317,8 @@ final class PetWindowContentView: NSView {
     private var threadSnapshot: ThreadPanelSnapshot?
     private var focusTimerSnapshot: FocusTimerSnapshot?
     private var isThreadPanelExpanded = false
-    private var isFlashPlacedLeft = true
+    private var horizontalPlacement: HorizontalPlacement = .trailing
+    private var threadPanelVerticalPlacement: ThreadPanelVerticalPlacement = .belowPet
     private var hasFlashMessages: Bool {
         !(threadSnapshot?.flashMessages.isEmpty ?? true)
     }
@@ -317,8 +341,20 @@ final class PetWindowContentView: NSView {
 
         let panelHeightConstraint = threadPanelView.heightAnchor.constraint(equalToConstant: Self.threadPanelMinHeight)
         threadPanelHeightConstraint = panelHeightConstraint
+        let petTopConstraint = petView.topAnchor.constraint(equalTo: topAnchor)
+        let petBelowThreadPanelConstraint = petView.topAnchor.constraint(
+            equalTo: threadPanelView.bottomAnchor,
+            constant: Self.threadPanelGap
+        )
         let petLeadingConstraint = petView.leadingAnchor.constraint(equalTo: leadingAnchor)
         let petTrailingConstraint = petView.trailingAnchor.constraint(equalTo: trailingAnchor)
+        let threadPanelTopConstraint = threadPanelView.topAnchor.constraint(equalTo: topAnchor)
+        let threadPanelBelowPetConstraint = threadPanelView.topAnchor.constraint(
+            equalTo: petView.bottomAnchor,
+            constant: Self.threadPanelGap
+        )
+        let threadPanelLeadingConstraint = threadPanelView.leadingAnchor.constraint(equalTo: petView.leadingAnchor)
+        let threadPanelTrailingConstraint = threadPanelView.trailingAnchor.constraint(equalTo: petView.trailingAnchor)
         let flashLeadingConstraint = flashStackView.leadingAnchor.constraint(
             equalTo: petView.trailingAnchor,
             constant: Self.flashPetGap
@@ -327,13 +363,18 @@ final class PetWindowContentView: NSView {
             equalTo: petView.leadingAnchor,
             constant: -Self.flashPetGap
         )
+        self.petTopConstraint = petTopConstraint
+        self.petBelowThreadPanelConstraint = petBelowThreadPanelConstraint
         self.petLeadingConstraint = petLeadingConstraint
         self.petTrailingConstraint = petTrailingConstraint
+        self.threadPanelTopConstraint = threadPanelTopConstraint
+        self.threadPanelBelowPetConstraint = threadPanelBelowPetConstraint
+        self.threadPanelLeadingConstraint = threadPanelLeadingConstraint
+        self.threadPanelTrailingConstraint = threadPanelTrailingConstraint
         self.flashLeadingConstraint = flashLeadingConstraint
         self.flashTrailingConstraint = flashTrailingConstraint
 
         NSLayoutConstraint.activate([
-            petView.topAnchor.constraint(equalTo: topAnchor),
             petView.widthAnchor.constraint(equalToConstant: petView.intrinsicContentSize.width),
             petView.heightAnchor.constraint(equalToConstant: petView.intrinsicContentSize.height),
 
@@ -342,15 +383,13 @@ final class PetWindowContentView: NSView {
             threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.badgeSize),
             threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.badgeSize),
 
-            threadPanelView.centerXAnchor.constraint(equalTo: centerXAnchor),
             threadPanelView.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth),
-            threadPanelView.topAnchor.constraint(equalTo: petView.bottomAnchor, constant: Self.threadPanelGap),
             panelHeightConstraint,
 
             flashStackView.topAnchor.constraint(equalTo: petView.topAnchor, constant: Self.flashTopOffset),
             flashStackView.widthAnchor.constraint(equalToConstant: Self.flashStackWidth)
         ])
-        petTrailingConstraint.isActive = true
+        applyFloatingSurfacePlacement()
 
         updateThreadSnapshot(nil)
     }
@@ -393,6 +432,7 @@ final class PetWindowContentView: NSView {
         didMouseDownOnPet = petView.frame.contains(localPoint)
         mouseDownScreenPoint = window?.convertPoint(toScreen: event.locationInWindow)
         mouseDownWindowOrigin = window?.frame.origin
+        mouseDownPetScreenOrigin = petScreenFrame()?.origin
         didDrag = false
     }
 
@@ -414,15 +454,24 @@ final class PetWindowContentView: NSView {
             x: currentScreenPoint.x - mouseDownScreenPoint.x,
             y: currentScreenPoint.y - mouseDownScreenPoint.y
         )
-        let nextFrame = NSRect(
-            x: mouseDownWindowOrigin.x + delta.x,
-            y: mouseDownWindowOrigin.y + delta.y,
-            width: window.frame.width,
-            height: window.frame.height
-        )
-        window.setFrame(FloatingPetWindow.constrainedFrame(nextFrame), display: true)
-        updateFlashPlacement()
-        applyFlashVisibilityAndPlacement()
+        if let mouseDownPetScreenOrigin {
+            let desiredPetOrigin = NSPoint(
+                x: mouseDownPetScreenOrigin.x + delta.x,
+                y: mouseDownPetScreenOrigin.y + delta.y
+            )
+            let desiredPetFrame = NSRect(origin: desiredPetOrigin, size: petView.intrinsicContentSize)
+            updateFloatingSurfacePlacement(forPetScreenFrame: desiredPetFrame)
+            applyFloatingSurfacePlacement()
+            placePet(at: desiredPetOrigin, display: true)
+        } else {
+            let nextFrame = NSRect(
+                x: mouseDownWindowOrigin.x + delta.x,
+                y: mouseDownWindowOrigin.y + delta.y,
+                width: window.frame.width,
+                height: window.frame.height
+            )
+            window.setFrame(FloatingPetWindow.constrainedFrame(nextFrame), display: true)
+        }
 
         if delta.distance(to: .zero) > clickMovementThreshold {
             didDrag = true
@@ -448,8 +497,10 @@ final class PetWindowContentView: NSView {
         } else if didMouseDownOnPet {
             let settledFrame = FloatingPetWindow.settledFrame(window.frame)
             window.setFrame(settledFrame, display: true)
+            updateFloatingSurfacePlacement()
+            applyFloatingSurfacePlacement(preservingPetPosition: true)
             onDragChanged?(nil)
-            onMoveEnded?(settledFrame.origin)
+            onMoveEnded?(window.frame.origin)
         }
 
         resetMouseTracking()
@@ -471,6 +522,7 @@ final class PetWindowContentView: NSView {
     private func resetMouseTracking() {
         mouseDownScreenPoint = nil
         mouseDownWindowOrigin = nil
+        mouseDownPetScreenOrigin = nil
         didMouseDownOnPet = false
         didDrag = false
     }
@@ -483,9 +535,9 @@ final class PetWindowContentView: NSView {
     }
 
     func updateThreadPanelSnapshot(_ snapshot: ThreadPanelSnapshot?) {
+        updateFloatingSurfacePlacement()
         let previousSize = desiredContentSize
         threadSnapshot = snapshot
-        updateFlashPlacement()
 
         if snapshot?.activeCount ?? 0 == 0 {
             isThreadPanelExpanded = false
@@ -493,10 +545,10 @@ final class PetWindowContentView: NSView {
 
         updateThreadBadge()
         rebuildFlashStack()
-        applyFlashVisibilityAndPlacement()
         rebuildThreadPanel()
         updateThreadPanelHeight()
         applyThreadPanelVisibility()
+        applyFloatingSurfacePlacement(preservingPetPosition: true)
 
         let nextSize = desiredContentSize
         if previousSize != nextSize {
@@ -506,11 +558,11 @@ final class PetWindowContentView: NSView {
     }
 
     func updateFocusTimerSnapshot(_ snapshot: FocusTimerSnapshot?) {
+        updateFloatingSurfacePlacement()
         let previousSize = desiredContentSize
         focusTimerSnapshot = snapshot
-        updateFlashPlacement()
         rebuildFlashStack()
-        applyFlashVisibilityAndPlacement()
+        applyFloatingSurfacePlacement(preservingPetPosition: true)
 
         let nextSize = desiredContentSize
         if previousSize != nextSize {
@@ -524,13 +576,13 @@ final class PetWindowContentView: NSView {
             return
         }
 
+        updateFloatingSurfacePlacement()
         let previousSize = desiredContentSize
         isThreadPanelExpanded.toggle()
         updateThreadBadge()
         updateThreadPanelHeight()
         applyThreadPanelVisibility()
-        updateFlashPlacement()
-        applyFlashVisibilityAndPlacement()
+        applyFloatingSurfacePlacement(preservingPetPosition: true)
 
         let nextSize = desiredContentSize
         if previousSize != nextSize {
@@ -584,21 +636,23 @@ final class PetWindowContentView: NSView {
         flashStackView.isHidden = true
     }
 
-    private func updateFlashPlacement() {
+    private func updateFloatingSurfacePlacement(forPetScreenFrame petScreenFrame: NSRect? = nil) {
         guard let window else {
             return
         }
 
+        layoutSubtreeIfNeeded()
+        let referenceFrame = petScreenFrame ?? self.petScreenFrame() ?? window.frame
         let screen = NSScreen.screens.first { screen in
-            screen.visibleFrame.intersects(window.frame)
+            screen.visibleFrame.intersects(referenceFrame)
         } ?? window.screen ?? NSScreen.main
         guard let visibleFrame = screen?.visibleFrame else {
             return
         }
 
-        let petFrameInWindow = convert(petView.frame, to: nil)
-        let petCenterX = window.frame.minX + petFrameInWindow.midX
-        isFlashPlacedLeft = petCenterX >= visibleFrame.midX
+        let petCenter = referenceFrame.center
+        horizontalPlacement = petCenter.x < visibleFrame.midX ? .leading : .trailing
+        threadPanelVerticalPlacement = petCenter.y < visibleFrame.midY ? .abovePet : .belowPet
     }
 
     private func rebuildFlashStack() {
@@ -634,15 +688,88 @@ final class PetWindowContentView: NSView {
         flashLeadingConstraint?.isActive = false
         flashTrailingConstraint?.isActive = false
 
-        if hasMessages, !isFlashPlacedLeft {
+        if horizontalPlacement == .leading {
             petLeadingConstraint?.isActive = true
-            flashLeadingConstraint?.isActive = true
+            if hasMessages {
+                flashLeadingConstraint?.isActive = true
+            }
         } else {
             petTrailingConstraint?.isActive = true
             if hasMessages {
                 flashTrailingConstraint?.isActive = true
             }
         }
+    }
+
+    private func applyThreadPanelPlacement() {
+        petTopConstraint?.isActive = false
+        petBelowThreadPanelConstraint?.isActive = false
+        threadPanelTopConstraint?.isActive = false
+        threadPanelBelowPetConstraint?.isActive = false
+        threadPanelLeadingConstraint?.isActive = false
+        threadPanelTrailingConstraint?.isActive = false
+
+        if isThreadPanelVisible, threadPanelVerticalPlacement == .abovePet {
+            threadPanelTopConstraint?.isActive = true
+            petBelowThreadPanelConstraint?.isActive = true
+        } else {
+            petTopConstraint?.isActive = true
+            threadPanelBelowPetConstraint?.isActive = true
+        }
+
+        switch horizontalPlacement {
+        case .leading:
+            threadPanelLeadingConstraint?.isActive = true
+        case .trailing:
+            threadPanelTrailingConstraint?.isActive = true
+        }
+    }
+
+    private func applyFloatingSurfacePlacement(preservingPetPosition: Bool = false) {
+        guard preservingPetPosition else {
+            applyThreadPanelPlacement()
+            applyFlashVisibilityAndPlacement()
+            return
+        }
+
+        let originalPetOrigin = petScreenFrame()?.origin
+        applyThreadPanelPlacement()
+        applyFlashVisibilityAndPlacement()
+
+        if let originalPetOrigin {
+            placePet(at: originalPetOrigin, display: false)
+        }
+    }
+
+    private func petScreenFrame() -> NSRect? {
+        guard let window else {
+            return nil
+        }
+
+        layoutSubtreeIfNeeded()
+        let petFrameInWindow = convert(petView.frame, to: nil)
+        return NSRect(
+            x: window.frame.minX + petFrameInWindow.minX,
+            y: window.frame.minY + petFrameInWindow.minY,
+            width: petFrameInWindow.width,
+            height: petFrameInWindow.height
+        )
+    }
+
+    private func placePet(at screenOrigin: NSPoint, display: Bool) {
+        guard let window else {
+            return
+        }
+
+        layoutSubtreeIfNeeded()
+        let petFrameInWindow = convert(petView.frame, to: nil)
+        let nextFrame = NSRect(
+            x: screenOrigin.x - petFrameInWindow.minX,
+            y: screenOrigin.y - petFrameInWindow.minY,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        window.setFrame(FloatingPetWindow.constrainedFrame(nextFrame), display: display)
     }
 
     private func updateThreadBadge() {
@@ -682,7 +809,11 @@ final class PetWindowContentView: NSView {
     }
 
     private func applyThreadPanelVisibility() {
-        threadPanelView.isHidden = !isThreadPanelExpanded || (threadSnapshot?.activeCount ?? 0) == 0
+        threadPanelView.isHidden = !isThreadPanelVisible
+    }
+
+    private var isThreadPanelVisible: Bool {
+        isThreadPanelExpanded && (threadSnapshot?.activeCount ?? 0) > 0
     }
 
     private var currentThreadPanelHeight: CGFloat {
@@ -1092,6 +1223,10 @@ private final class ThreadMessageRowView: NSView {
     private static let replyControlHeight: CGFloat = 34
     private static let replyButtonWidth: CGFloat = 76
     private static let replyInputWidth: CGFloat = 218
+    private static let replyRestingFillAlpha: CGFloat = 0.07
+    private static let replyActiveFillAlpha: CGFloat = 0.13
+    private static let replyRestingBorderAlpha: CGFloat = 0.18
+    private static let replyActiveBorderAlpha: CGFloat = 0.34
 
     private let thread: ThreadDisplayRow
     private let onOpen: (ThreadDisplayRow) -> Void
@@ -1134,6 +1269,11 @@ private final class ThreadMessageRowView: NSView {
 
     override var intrinsicContentSize: NSSize {
         NSSize(width: NSView.noIntrinsicMetric, height: Self.fixedHeight)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateReplyControlChrome()
     }
 
     override func updateTrackingAreas() {
@@ -1207,6 +1347,9 @@ private final class ThreadMessageRowView: NSView {
             replyControlEffectView.isHidden = true
 
             replyControlContentView.translatesAutoresizingMaskIntoConstraints = false
+            replyControlContentView.wantsLayer = true
+            replyControlContentView.layer?.cornerRadius = Self.replyControlRadius
+            replyControlContentView.layer?.masksToBounds = true
 
             replyControlContentView.addSubview(replyButton)
             replyButton.translatesAutoresizingMaskIntoConstraints = false
@@ -1228,6 +1371,8 @@ private final class ThreadMessageRowView: NSView {
             sendButton.target = self
             sendButton.action = #selector(sendMessage)
             sendButton.isHidden = true
+
+            updateReplyControlChrome()
         }
 
         contentView.addSubview(closeButton)
@@ -1314,6 +1459,7 @@ private final class ThreadMessageRowView: NSView {
         replyButton.isHidden = true
         messageField.isHidden = false
         sendButton.isHidden = false
+        updateReplyControlChrome()
         window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(messageField)
     }
@@ -1329,6 +1475,7 @@ private final class ThreadMessageRowView: NSView {
         messageField.isHidden = true
         sendButton.isHidden = true
         replyButton.isHidden = false
+        updateReplyControlChrome()
         setReplyOverlayVisible(false)
         onSendMessage(thread, message)
     }
@@ -1344,6 +1491,27 @@ private final class ThreadMessageRowView: NSView {
             messageField.isHidden = true
             sendButton.isHidden = true
         }
+        updateReplyControlChrome()
+    }
+
+    private func updateReplyControlChrome() {
+        guard thread.canSendMessage else {
+            return
+        }
+
+        let fillAlpha = isReplying ? Self.replyActiveFillAlpha : Self.replyRestingFillAlpha
+        let borderAlpha = isReplying ? Self.replyActiveBorderAlpha : Self.replyRestingBorderAlpha
+        let borderWidth: CGFloat = isReplying ? 1.2 : 1.0
+        var fillColor = NSColor.labelColor.withAlphaComponent(fillAlpha).cgColor
+        var borderColor = NSColor.labelColor.withAlphaComponent(borderAlpha).cgColor
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            fillColor = NSColor.labelColor.withAlphaComponent(fillAlpha).cgColor
+            borderColor = NSColor.labelColor.withAlphaComponent(borderAlpha).cgColor
+        }
+
+        replyControlContentView.layer?.backgroundColor = fillColor
+        replyControlEffectView.layer?.borderWidth = borderWidth
+        replyControlEffectView.layer?.borderColor = borderColor
     }
 }
 

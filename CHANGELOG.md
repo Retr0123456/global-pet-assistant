@@ -7,6 +7,11 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.2 - 2026-05-10
+
+- Fixed expanded thread panel placement near screen corners so the panel follows the pet's screen quadrant without pulling the pet away from the dragged position.
+- Improved reply control contrast in the thread panel so the input affordance remains visible in light appearance.
+
 ## 0.4.1 - 2026-05-09
 
 - Moved the structured kitty integration into `plugins/kitty` as a first-class plugin.
