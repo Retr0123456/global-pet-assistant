@@ -7,6 +7,14 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.3 - 2026-05-13
+
+- Added aggregate thread-state selection so visible failed rows beat success rows, success rows beat running or waiting rows, and idle only plays when no tracked rows remain.
+- Changed success feedback to use the `waving` animation for long-lived rows, flash events, terminal command success, and projected agent completion.
+- Replaced the single thread-count badge with a compact red/yellow/green status bar showing failed, running-or-waiting, and successful row counts.
+- Simplified the README and integration docs, with English and Chinese versions for the main install path, Kitty plugin setup, and Codex hook setup.
+- Added DMG generation to the release packaging script.
+
 ## 0.4.2 - 2026-05-10
 
 - Fixed expanded thread panel placement near screen corners so the panel follows the pet's screen quadrant without pulling the pet away from the dragged position.

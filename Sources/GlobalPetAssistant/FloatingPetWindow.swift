@@ -271,7 +271,8 @@ final class PetWindowContentView: NSView {
     private static let threadPanelVerticalInset: CGFloat = 0
     private static let threadStackSpacing: CGFloat = 5
     private static let threadPanelGap: CGFloat = 6
-    private static let badgeSize: CGFloat = 30
+    private static let threadStatusBarWidth: CGFloat = 108
+    private static let threadStatusBarHeight: CGFloat = 30
     private static let flashStackWidth: CGFloat = 220
     private static let flashRowHeight: CGFloat = 34
     private static let flashStackSpacing: CGFloat = 6
@@ -453,8 +454,8 @@ final class PetWindowContentView: NSView {
 
             threadBadgeButton.topAnchor.constraint(equalTo: petView.topAnchor),
             threadBadgeButton.trailingAnchor.constraint(equalTo: petView.trailingAnchor),
-            threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.badgeSize),
-            threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.badgeSize),
+            threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.threadStatusBarWidth),
+            threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.threadStatusBarHeight),
 
             petScaleControlContainer.centerYAnchor.constraint(equalTo: petView.centerYAnchor),
             petScaleControlContainer.widthAnchor.constraint(equalToConstant: Self.scaleControlWidth),
@@ -1021,8 +1022,8 @@ final class PetWindowContentView: NSView {
     }
 
     private func updateThreadBadge() {
-        let count = threadSnapshot?.activeCount ?? 0
-        threadBadgeButton.update(count: count, isExpanded: isThreadPanelExpanded)
+        let summary = threadSnapshot?.statusSummary ?? .empty
+        threadBadgeButton.update(summary: summary, isExpanded: isThreadPanelExpanded)
     }
 
     private func rebuildThreadPanel() {
@@ -1471,14 +1472,17 @@ private final class PassthroughVisualEffectView: NSVisualEffectView {
 
 private final class ThreadBadgeEffectButton: NSView {
     private static let cornerRadius: CGFloat = 10
-    private static let iconSize: CGFloat = 14
+    private static let chevronSize: CGFloat = 10
 
     var onPress: (() -> Void)?
 
     private let effectView = PassthroughVisualEffectView()
     private let contentView = NSView()
-    private let imageView = NSImageView()
-    private let textField = NSTextField(labelWithString: "")
+    private let stackView = NSStackView()
+    private let failedSegment = ThreadStatusCountSegmentView(color: .systemRed)
+    private let runningSegment = ThreadStatusCountSegmentView(color: .systemYellow)
+    private let successSegment = ThreadStatusCountSegmentView(color: .systemGreen)
+    private let chevronView = NSImageView()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1497,23 +1501,13 @@ private final class ThreadBadgeEffectButton: NSView {
         onPress?()
     }
 
-    func update(count: Int, isExpanded: Bool) {
-        isHidden = count == 0
-
-        if isExpanded {
-            textField.isHidden = true
-            imageView.isHidden = false
-            imageView.image = NSImage(
-                systemSymbolName: "chevron.down",
-                accessibilityDescription: "Hide thread details"
-            )
-            toolTip = "Hide thread details"
-        } else {
-            imageView.isHidden = true
-            textField.isHidden = false
-            textField.stringValue = "\(count)"
-            toolTip = "\(count) active thread\(count == 1 ? "" : "s")"
-        }
+    func update(summary: ThreadStatusSummary, isExpanded: Bool) {
+        isHidden = summary.totalCount == 0
+        failedSegment.update(count: summary.failedCount)
+        runningSegment.update(count: summary.runningCount)
+        successSegment.update(count: summary.successCount)
+        chevronView.isHidden = !isExpanded
+        toolTip = isExpanded ? "Hide thread details. \(summary.tooltip)" : "Show thread details. \(summary.tooltip)"
     }
 
     private func setupView() {
@@ -1529,16 +1523,24 @@ private final class ThreadBadgeEffectButton: NSView {
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.clear.cgColor
 
-        contentView.addSubview(imageView)
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.contentTintColor = .labelColor
-        imageView.imageScaling = .scaleProportionallyDown
+        contentView.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.orientation = .horizontal
+        stackView.alignment = .centerY
+        stackView.distribution = .fill
+        stackView.spacing = 6
+        stackView.addArrangedSubview(failedSegment)
+        stackView.addArrangedSubview(runningSegment)
+        stackView.addArrangedSubview(successSegment)
+        stackView.addArrangedSubview(chevronView)
 
-        contentView.addSubview(textField)
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.alignment = .center
-        textField.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
-        textField.textColor = .labelColor
+        chevronView.image = NSImage(
+            systemSymbolName: "chevron.down",
+            accessibilityDescription: "Hide thread details"
+        )
+        chevronView.contentTintColor = .labelColor
+        chevronView.imageScaling = .scaleProportionallyDown
+        chevronView.isHidden = true
 
         NSLayoutConstraint.activate([
             effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -1551,14 +1553,65 @@ private final class ThreadBadgeEffectButton: NSView {
             contentView.topAnchor.constraint(equalTo: effectView.topAnchor),
             contentView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
 
-            imageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            imageView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            imageView.widthAnchor.constraint(equalToConstant: Self.iconSize),
-            imageView.heightAnchor.constraint(equalToConstant: Self.iconSize),
+            stackView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            stackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
-            textField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            textField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            textField.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+            chevronView.widthAnchor.constraint(equalToConstant: Self.chevronSize),
+            chevronView.heightAnchor.constraint(equalToConstant: Self.chevronSize)
+        ])
+    }
+}
+
+private final class ThreadStatusCountSegmentView: NSView {
+    private static let dotSize: CGFloat = 6
+    private static let labelWidth: CGFloat = 15
+
+    private let dotView = NSView()
+    private let textField = NSTextField(labelWithString: "0")
+    private let color: NSColor
+
+    init(color: NSColor) {
+        self.color = color
+        super.init(frame: .zero)
+        setupView()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(count: Int) {
+        textField.stringValue = "\(min(count, 99))"
+        textField.toolTip = count > 99 ? "\(count)" : nil
+    }
+
+    private func setupView() {
+        translatesAutoresizingMaskIntoConstraints = false
+
+        dotView.translatesAutoresizingMaskIntoConstraints = false
+        dotView.wantsLayer = true
+        dotView.layer?.backgroundColor = color.cgColor
+        dotView.layer?.cornerRadius = Self.dotSize / 2
+        addSubview(dotView)
+
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.alignment = .left
+        textField.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        textField.textColor = .labelColor
+        addSubview(textField)
+
+        NSLayoutConstraint.activate([
+            dotView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            dotView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dotView.widthAnchor.constraint(equalToConstant: Self.dotSize),
+            dotView.heightAnchor.constraint(equalToConstant: Self.dotSize),
+
+            textField.leadingAnchor.constraint(equalTo: dotView.trailingAnchor, constant: 3),
+            textField.trailingAnchor.constraint(equalTo: trailingAnchor),
+            textField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            textField.widthAnchor.constraint(equalToConstant: Self.labelWidth),
+
+            heightAnchor.constraint(equalToConstant: 16)
         ])
     }
 }

@@ -106,7 +106,7 @@ struct LocalPetEvent: Codable, Equatable {
         case .warning:
             return .waiting
         case .success:
-            return .review
+            return .waving
         case .running:
             return .running
         case .info, .none:
@@ -199,11 +199,11 @@ struct LocalPetEvent: Codable, Equatable {
             return .failed
         case .waiting:
             return .waiting
-        case .review:
+        case .review, .waving:
             return .success
         case .running, .runningLeft, .runningRight, .jumping:
             return .running
-        case .idle, .waving:
+        case .idle:
             return .info
         }
     }
@@ -237,7 +237,7 @@ struct LocalPetEvent: Codable, Equatable {
         case .warning:
             return .waiting
         case .success:
-            return .review
+            return .waving
         case .running:
             return .jumping
         case .info, .none:

@@ -9,9 +9,9 @@ struct PetBehaviorControllerTests {
     }
 
     @Test
-    func successFlashUsesReviewAnimation() {
+    func successFlashUsesWavingAnimation() {
         let event = LocalPetEvent(source: "terminal", type: "flash", level: .success)
 
-        #expect(event.flashAnimationState == .review)
+        #expect(event.flashAnimationState == .waving)
     }
 }

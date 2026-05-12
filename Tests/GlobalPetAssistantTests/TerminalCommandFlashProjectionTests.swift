@@ -11,6 +11,7 @@ struct TerminalCommandFlashProjectionTests {
         #expect(flash?.type == "flash")
         #expect(flash?.level == .success)
         #expect(flash?.message == "swift test passed")
+        #expect(flash?.state == .waving)
         #expect(flash?.transient == true)
     }
 

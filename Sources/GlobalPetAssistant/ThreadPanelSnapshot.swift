@@ -55,7 +55,7 @@ struct ThreadDisplayRow: Equatable, Identifiable {
         case .waiting, .approvalRequired:
             return .waiting
         case .success:
-            return .review
+            return .waving
         case .failed:
             return .failed
         case .info:
@@ -86,5 +86,91 @@ struct ThreadPanelSnapshot: Equatable {
     var displayRows: [ThreadDisplayRow] {
         agentThreads.map(ThreadDisplayRow.init(agent:))
             + genericThreads.map(ThreadDisplayRow.init(generic:))
+    }
+
+    var statusSummary: ThreadStatusSummary {
+        ThreadStatusSummary(rows: displayRows)
+    }
+
+    var preferredPetState: PetAnimationState {
+        statusSummary.preferredPetState
+    }
+}
+
+struct ThreadStatusSummary: Equatable {
+    let failedCount: Int
+    let runningCount: Int
+    let successCount: Int
+    let hasWaiting: Bool
+
+    static let empty = ThreadStatusSummary(
+        failedCount: 0,
+        runningCount: 0,
+        successCount: 0,
+        hasWaiting: false
+    )
+
+    init(
+        failedCount: Int,
+        runningCount: Int,
+        successCount: Int,
+        hasWaiting: Bool
+    ) {
+        self.failedCount = failedCount
+        self.runningCount = runningCount
+        self.successCount = successCount
+        self.hasWaiting = hasWaiting
+    }
+
+    init(rows: [ThreadDisplayRow]) {
+        var failedCount = 0
+        var runningCount = 0
+        var successCount = 0
+        var hasWaiting = false
+
+        for row in rows {
+            switch row.status {
+            case .failed:
+                failedCount += 1
+            case .running:
+                runningCount += 1
+            case .waiting, .approvalRequired:
+                runningCount += 1
+                hasWaiting = true
+            case .success:
+                successCount += 1
+            case .info:
+                break
+            }
+        }
+
+        self.failedCount = failedCount
+        self.runningCount = runningCount
+        self.successCount = successCount
+        self.hasWaiting = hasWaiting
+    }
+
+    var totalCount: Int {
+        failedCount + runningCount + successCount
+    }
+
+    var preferredPetState: PetAnimationState {
+        if failedCount > 0 {
+            return .failed
+        }
+
+        if successCount > 0 {
+            return .waving
+        }
+
+        if runningCount > 0 {
+            return hasWaiting ? .waiting : .running
+        }
+
+        return .idle
+    }
+
+    var tooltip: String {
+        "\(failedCount) failed, \(runningCount) running or waiting, \(successCount) successful"
     }
 }

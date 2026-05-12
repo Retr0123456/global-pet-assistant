@@ -267,12 +267,12 @@ final class EventRouter {
         switch state {
         case .failed:
             50
-        case .waiting:
+        case .waving, .review:
             40
-        case .running, .runningLeft, .runningRight, .jumping, .waving:
+        case .waiting:
             30
-        case .review:
-            20
+        case .running, .runningLeft, .runningRight, .jumping:
+            30
         case .idle:
             0
         }

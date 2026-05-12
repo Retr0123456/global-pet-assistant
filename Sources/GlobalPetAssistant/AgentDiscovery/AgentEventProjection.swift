@@ -43,7 +43,7 @@ enum AgentEventProjection {
         case .waiting:
             return .waiting
         case .completed:
-            return .review
+            return .waving
         case .failed:
             return .failed
         case .unknown:

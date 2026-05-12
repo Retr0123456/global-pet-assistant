@@ -14,13 +14,16 @@ BIN_DIR="$(swift build -c release ${SWIFT_BUILD_FLAGS} --show-bin-path)"
 APP_PATH="$ROOT_DIR/.build/release/GlobalPetAssistant.app"
 ZIP_PATH="$ROOT_DIR/.build/release/GlobalPetAssistant.zip"
 CHECKSUM_PATH="$ZIP_PATH.sha256"
+DMG_STAGING_DIR="$ROOT_DIR/.build/release/dmg"
+DMG_PATH="$ROOT_DIR/.build/release/GlobalPetAssistant.dmg"
+DMG_CHECKSUM_PATH="$DMG_PATH.sha256"
 EXECUTABLE="$BIN_DIR/GlobalPetAssistant"
 RESOURCE_BUNDLE="$BIN_DIR/GlobalPetAssistant_GlobalPetAssistant.bundle"
 APP_ICON="$ROOT_DIR/Assets/AppIcon/AppIcon.icns"
 PETCTL_EXECUTABLE="$BIN_DIR/petctl"
 AGENT_BRIDGE_EXECUTABLE="$BIN_DIR/global-pet-agent-bridge"
 
-rm -rf "$APP_PATH" "$ZIP_PATH" "$CHECKSUM_PATH"
+rm -rf "$APP_PATH" "$ZIP_PATH" "$CHECKSUM_PATH" "$DMG_STAGING_DIR" "$DMG_PATH" "$DMG_CHECKSUM_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources/bin" "$APP_PATH/Contents/Resources/Tools"
 
 cp "$EXECUTABLE" "$APP_PATH/Contents/MacOS/GlobalPetAssistant"
@@ -55,9 +58,9 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.4.2</string>
+  <string>0.4.3</string>
   <key>CFBundleVersion</key>
-  <string>11</string>
+  <string>12</string>
   <key>LSMinimumSystemVersion</key>
   <string>26.0</string>
   <key>LSUIElement</key>
@@ -71,7 +74,14 @@ PLIST
 codesign --force --deep --sign - "$APP_PATH"
 ditto -c -k --norsrc --keepParent "$APP_PATH" "$ZIP_PATH"
 shasum -a 256 "$ZIP_PATH" > "$CHECKSUM_PATH"
+mkdir -p "$DMG_STAGING_DIR"
+ditto "$APP_PATH" "$DMG_STAGING_DIR/GlobalPetAssistant.app"
+ln -s /Applications "$DMG_STAGING_DIR/Applications"
+hdiutil create -volname "Global Pet Assistant" -srcfolder "$DMG_STAGING_DIR" -ov -format UDZO "$DMG_PATH"
+shasum -a 256 "$DMG_PATH" > "$DMG_CHECKSUM_PATH"
 
 echo "$APP_PATH"
 echo "$ZIP_PATH"
 echo "$CHECKSUM_PATH"
+echo "$DMG_PATH"
+echo "$DMG_CHECKSUM_PATH"

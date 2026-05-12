@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct EventRouterTests {
     @Test
-    func testFailedBeatsWaitingReviewAndRunning() {
+    func testFailedBeatsSuccessWaitingAndRunning() {
         var now = Date(timeIntervalSince1970: 1_000)
         let router = EventRouter(now: { now }, onStateChange: { _ in })
 
@@ -16,7 +16,7 @@ struct EventRouterTests {
         #expect(router.currentState == PetAnimationState.waiting)
 
         router.accept(LocalPetEvent(source: "review", level: .success, ttlMs: 10_000))
-        #expect(router.currentState == PetAnimationState.waiting)
+        #expect(router.currentState == PetAnimationState.waving)
 
         router.accept(LocalPetEvent(source: "failed", level: .danger, ttlMs: 10_000))
         #expect(router.currentState == PetAnimationState.failed)
@@ -154,18 +154,18 @@ struct EventRouterTests {
     }
 
     @Test
-    func testNewRunningEventBeatsStaleReviewEvent() {
+    func testStaleSuccessEventBeatsNewRunningEventUntilDismissed() {
         let router = EventRouter(onStateChange: { _ in })
 
         router.accept(LocalPetEvent(source: "old-codex-session", level: .success, ttlMs: 300_000))
-        #expect(router.currentState == PetAnimationState.review)
+        #expect(router.currentState == PetAnimationState.waving)
 
         router.accept(LocalPetEvent(source: "active-codex-session", level: .running, ttlMs: 120_000))
 
         let snapshot = router.snapshot
         #expect(snapshot.activeEventCount == 2)
-        #expect(snapshot.currentSource == "active-codex-session")
-        #expect(router.currentState == PetAnimationState.running)
+        #expect(snapshot.currentSource == "old-codex-session")
+        #expect(router.currentState == PetAnimationState.waving)
     }
 
     @Test
@@ -323,7 +323,7 @@ struct EventRouterTests {
         let snapshot = router.snapshot
         #expect(snapshot.activeEventCount == 0)
         #expect(snapshot.flashMessages.first?.message == "legacy transient")
-        #expect(snapshot.flashMessages.first?.state == .review)
+        #expect(snapshot.flashMessages.first?.state == .waving)
         #expect(router.currentState == .idle)
     }
 }

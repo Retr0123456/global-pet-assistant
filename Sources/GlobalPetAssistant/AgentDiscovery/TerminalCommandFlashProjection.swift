@@ -46,7 +46,7 @@ struct TerminalCommandFlashProjection {
             level: level,
             title: "Terminal command",
             message: message,
-            state: exitCode == 0 ? .review : .failed,
+            state: exitCode == 0 ? .waving : .failed,
             ttlMs: ttlMs,
             dedupeKey: "terminal-command:\(event.terminal.sessionId):\(label)",
             cwd: event.terminal.cwd,

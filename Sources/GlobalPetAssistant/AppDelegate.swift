@@ -145,9 +145,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func installEventRouter() {
         eventRouter = EventRouter(
-            onStateChange: { [weak self] state in
+            onStateChange: { [weak self] _ in
                 self?.petWindow?.show()
-                self?.petBehaviorController?.setBaseState(state)
             },
             onSnapshotChange: { [weak self] snapshot in
                 self?.latestEventRouterSnapshot = snapshot
@@ -202,6 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             agentThreads: AgentThreadProjection.snapshots(from: latestAgentRegistrySnapshot),
             flashMessages: latestEventRouterSnapshot?.flashMessages ?? []
         )
+        petBehaviorController?.setBaseState(panelSnapshot.preferredPetState)
         petWindow?.updateThreadPanelSnapshot(panelSnapshot)
     }
 
