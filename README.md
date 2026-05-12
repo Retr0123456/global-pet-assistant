@@ -10,7 +10,7 @@ The project goal is to separate the pet into two layers:
 ## Status
 
 - Public source beta for macOS 26 and the AppKit Liquid Glass SDK.
-- No notarized downloadable release is published yet; build from source or package a local beta from this checkout.
+- Public beta release downloads are published on GitHub, but they are not notarized yet. You can also build from source or package a local beta from this checkout.
 - The event API is local-only. Mutating writes require a bearer token generated on first app launch.
 - Blobbit, an original generated default pet, is bundled and installed into the app-owned pet folder on first launch. Users can import compatible local pet packages.
 
@@ -148,78 +148,15 @@ swift run petctl notify \
 curl -fsS http://127.0.0.1:17321/healthz
 ```
 
-## Kitty Plugin Install
+## Kitty Plugin
 
 The preferred kitty integration is a kitty global watcher. It observes shell
-command start/end events, posts structured terminal events to
-`/terminal-plugin/events`, can emit command completion flash events, and provides
-terminal-observed Codex process start/end observations for `codex` and `cdx`.
+command start/end events, posts structured terminal events to the local app, and
+can provide kitty target metadata for trusted focus/reply actions.
 
-Before installing:
-
-1. Install and launch kitty.
-2. Launch Global Pet Assistant once so it creates
-   `~/.global-pet-assistant/token`.
-3. Make sure the app is reachable:
-
-```bash
-curl -fsS http://127.0.0.1:17321/healthz
-```
-
-Install from a source checkout:
-
-```bash
-plugins/kitty/install.sh
-```
-
-Install from an installed release app:
-
-```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
-```
-
-The installer copies plugin files into
-`~/.config/kitty/global-pet-assistant/` and adds a managed include to
-`~/.config/kitty/kitty.conf`. That include enables:
-
-- `watcher ~/.config/kitty/global-pet-assistant/global_pet_assistant_watcher.py`
-- `allow_remote_control socket-only`
-- `listen_on unix:~/.config/kitty/global-pet-assistant/kitty.sock`
-
-Fully quit and reopen kitty after the first install. Then verify command flash:
-
-```bash
-sleep 3
-false
-```
-
-Both commands should produce short pet flash events when Global Pet Assistant is
-running. Low-noise commands such as `cd`, `ls`, `pwd`, and `git status` are
-ignored by the app projection.
-
-Install Codex hooks as well when you want prompt/tool/waiting lifecycle updates
-instead of only terminal process observations:
-
-```bash
-Tools/install-codex-hooks.sh
-```
-
-See [`plugins/kitty/README.md`](plugins/kitty/README.md) for disable,
-uninstall, and legacy zsh compatibility options.
-
-Legacy kitty manual command flash compatibility hook:
-
-```bash
-Tools/install-kitty-command-hook.sh
-```
-
-The installer copies `examples/hooks/kitty-command-flash.zsh` to
-`~/.global-pet-assistant/hooks/` and adds a guarded source block to `~/.zshrc`.
-It only runs in interactive kitty zsh sessions. Failed commands send a danger
-flash; successful commands only send a success flash when they take at least
-`GPA_KITTY_COMMAND_FLASH_MIN_SUCCESS_MS` milliseconds, default `5000`.
-Set `GPA_KITTY_COMMAND_FLASH=0` to disable it for a session. High-frequency
-commands such as `cd`, `ls`, `pwd`, and `git status` are ignored.
+Release downloads and the complete installation, verification, disable, and
+legacy compatibility instructions live in the
+[Kitty Plugin Install Guide](plugins/kitty/README.md).
 
 `/healthz` returns the app liveness status plus the router snapshot (`state` and `activeEvents`) so scripts can distinguish a reachable app from an idle or busy pet.
 
@@ -402,6 +339,15 @@ SWIFT_BUILD_FLAGS=--disable-sandbox Tools/package-release-app.sh
 
 ## Install
 
+Download the latest beta DMG from
+<https://github.com/Retr0123456/global-pet-assistant/releases/latest>, drag
+`GlobalPetAssistant.app` into `/Applications`, then launch it:
+
+```bash
+open /Applications/GlobalPetAssistant.app
+curl -fsS http://127.0.0.1:17321/healthz
+```
+
 Local beta install from a built checkout:
 
 ```bash
@@ -409,15 +355,6 @@ Tools/package-release-app.sh
 ditto .build/release/GlobalPetAssistant.app /Applications/GlobalPetAssistant.app
 open /Applications/GlobalPetAssistant.app
 curl -fsS http://127.0.0.1:17321/healthz
-```
-
-If installing from a release zip:
-
-```bash
-shasum -a 256 -c GlobalPetAssistant.zip.sha256
-ditto -x -k GlobalPetAssistant.zip .
-ditto GlobalPetAssistant.app /Applications/GlobalPetAssistant.app
-open /Applications/GlobalPetAssistant.app
 ```
 
 Release apps include helper binaries under
@@ -481,8 +418,9 @@ installed app with macOS Login Items; disabling it removes that registration.
 ## Release Identity
 
 - Bundle identifier: `io.github.globalpetassistant.GlobalPetAssistant`.
-- Current package script: ad-hoc signed local beta zip.
-- Public downloadable releases should use Developer ID signing and notarization.
+- Current package script: ad-hoc signed local beta zip; GitHub beta releases can
+  wrap the packaged app in a DMG.
+- Public stable releases should use Developer ID signing and notarization.
 - `Tools/package-release-app.sh` writes `GlobalPetAssistant.zip.sha256` next to
   the release zip.
 
@@ -503,6 +441,7 @@ The bundled default pet is an original generated Codex-compatible package under
 - [Notification And Focus Architecture Reduction Plan](docs/notification-focus-architecture-reduction-plan.md)
 - [Assets And Licensing](docs/assets-and-licensing.md)
 - [Codex Hook Integration](docs/codex-hook-integration.md)
+- [Kitty Plugin Install Guide](plugins/kitty/README.md)
 - [Desktop Pet Experience Plan](docs/desktop-experience-plan.md)
 - [Daily-driver MVP Task List](docs/daily-driver-mvp.md)
 - [Release Candidate Plan](docs/release-candidate-plan.md)
