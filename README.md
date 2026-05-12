@@ -300,6 +300,12 @@ menu under `Switch Pet`. The submenu lists compatible installed packages from
 `~/.global-pet-assistant/pets`, marks the current pet with a checkmark, and
 applies a new selection immediately. The selected pet persists across launches.
 
+Desktop UI settings are available from the menu bar item and the pet right-click
+menu under `Settings...`. They persist in
+`~/.global-pet-assistant/ui-preferences.json` and include Thread Panel opacity,
+pet size, and an optional `Resize Pet by Dragging` mode. When resize mode is on,
+dragging the pet changes its desktop size instead of moving it.
+
 Manual event-runtime verification:
 
 ```bash

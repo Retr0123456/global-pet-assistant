@@ -31,6 +31,9 @@ enum AppStorage {
     private static let eventPreferencesURL = rootDirectory
         .appendingPathComponent("event-preferences.json")
 
+    private static let userInterfacePreferencesURL = rootDirectory
+        .appendingPathComponent("ui-preferences.json")
+
     private static let focusTimerURL = rootDirectory
         .appendingPathComponent("focus-timer.json")
 
@@ -83,6 +86,24 @@ enum AppStorage {
         try ensureLayout()
         let data = try JSONEncoder().encode(preferences)
         try data.write(to: eventPreferencesURL, options: [.atomic])
+    }
+
+    static func loadUserInterfacePreferences() -> UserInterfacePreferences {
+        guard let data = try? Data(contentsOf: userInterfacePreferencesURL),
+              let preferences = try? JSONDecoder().decode(UserInterfacePreferences.self, from: data)
+        else {
+            return UserInterfacePreferences()
+        }
+
+        return preferences.clamped()
+    }
+
+    static func saveUserInterfacePreferences(_ preferences: UserInterfacePreferences) throws {
+        try ensureLayout()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(preferences.clamped())
+        try data.write(to: userInterfacePreferencesURL, options: [.atomic])
     }
 
     static func loadFocusTimerRecord() -> FocusTimerRecord? {
@@ -225,5 +246,28 @@ struct EventPreferences: Codable {
 
     var mutedSourceSet: Set<String> {
         Set(mutedSources)
+    }
+}
+
+struct UserInterfacePreferences: Codable, Equatable {
+    static let minimumThreadPanelOpacity = 0.35
+    static let maximumThreadPanelOpacity = 1.0
+    static let defaultThreadPanelOpacity = 0.92
+    static let minimumPetScale = 0.65
+    static let maximumPetScale = 1.8
+    static let defaultPetScale = 1.0
+
+    var threadPanelOpacity = defaultThreadPanelOpacity
+    var petScale = defaultPetScale
+    var isPetResizeModeEnabled = false
+
+    func clamped() -> UserInterfacePreferences {
+        var preferences = self
+        preferences.threadPanelOpacity = min(
+            Self.maximumThreadPanelOpacity,
+            max(Self.minimumThreadPanelOpacity, threadPanelOpacity)
+        )
+        preferences.petScale = min(Self.maximumPetScale, max(Self.minimumPetScale, petScale))
+        return preferences
     }
 }
