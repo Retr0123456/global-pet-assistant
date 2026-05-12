@@ -294,7 +294,11 @@ clear. See [Assets And Licensing](docs/assets-and-licensing.md).
 GUI pet switching is available from the menu bar item and the pet right-click
 menu under `Switch Pet`. The submenu lists compatible installed packages from
 `~/.global-pet-assistant/pets`, marks the current pet with a checkmark, and
-applies a new selection immediately. The selected pet persists across launches.
+applies a new selection immediately. Opening the submenu also syncs compatible
+packages from `petImportSourceDirectories` such as `~/.codex/pets`, and the
+`Sync from Codex` item can refresh that list manually. Synced packages are
+copied into the app-owned pet folder rather than symlinked into Codex state.
+The selected pet persists across launches.
 
 Manual event-runtime verification:
 

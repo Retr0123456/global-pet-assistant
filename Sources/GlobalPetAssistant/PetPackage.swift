@@ -84,6 +84,38 @@ struct PetPackage: Decodable {
         loadCompatiblePets(in: AppStorage.petsDirectory)
     }
 
+    @discardableResult
+    static func syncFromImportSources(
+        _ sourceDirectories: [URL],
+        destinationRoot: URL = AppStorage.petsDirectory
+    ) -> PetSyncSummary {
+        var summary = PetSyncSummary()
+        for sourceDirectory in sourceDirectories {
+            let packages = loadCompatiblePets(in: sourceDirectory)
+            for package in packages {
+                do {
+                    let destinationDirectory = destinationRoot
+                        .appendingPathComponent(package.directoryURL.lastPathComponent, isDirectory: true)
+                    guard destinationDirectory.standardizedFileURL != package.directoryURL.standardizedFileURL else {
+                        continue
+                    }
+
+                    if try syncPackage(package, to: destinationDirectory) {
+                        summary.syncedPackageIDs.append(package.id)
+                    }
+                } catch {
+                    summary.failedPackages.append(PetSyncFailure(
+                        packageID: package.id,
+                        sourcePath: package.directoryURL.path,
+                        errorDescription: String(describing: error)
+                    ))
+                }
+            }
+        }
+
+        return summary
+    }
+
     static func sortedForDisplay(_ packages: [PetPackage]) -> [PetPackage] {
         packages.sorted { lhs, rhs in
             lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
@@ -207,11 +239,59 @@ struct PetPackage: Decodable {
 
         try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
     }
+
+    private static func syncPackage(_ package: PetPackage, to destinationDirectory: URL) throws -> Bool {
+        let sourceManifestURL = package.directoryURL.appendingPathComponent("pet.json")
+        let sourceSpritesheetURL = package.spritesheetURL
+        let destinationManifestURL = destinationDirectory.appendingPathComponent("pet.json")
+        let destinationSpritesheetURL = destinationDirectory.appendingPathComponent(package.spritesheetPath)
+
+        guard FileManager.default.fileExists(atPath: sourceSpritesheetURL.path) else {
+            throw PetPackageError.missingSpritesheet(sourceSpritesheetURL.path)
+        }
+
+        let manifestChanged = filesDiffer(sourceManifestURL, destinationManifestURL)
+        let spritesheetChanged = filesDiffer(sourceSpritesheetURL, destinationSpritesheetURL)
+        guard manifestChanged || spritesheetChanged else {
+            return false
+        }
+
+        try FileManager.default.createDirectory(
+            at: destinationDirectory,
+            withIntermediateDirectories: true
+        )
+        try replaceCopy(from: sourceManifestURL, to: destinationManifestURL)
+        try replaceCopy(from: sourceSpritesheetURL, to: destinationSpritesheetURL)
+        return true
+    }
+
+    private static func filesDiffer(_ lhs: URL, _ rhs: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: rhs.path),
+              let lhsData = try? Data(contentsOf: lhs),
+              let rhsData = try? Data(contentsOf: rhs)
+        else {
+            return true
+        }
+
+        return lhsData != rhsData
+    }
+}
+
+struct PetSyncSummary: Equatable {
+    var syncedPackageIDs: [String] = []
+    var failedPackages: [PetSyncFailure] = []
+}
+
+struct PetSyncFailure: Equatable {
+    let packageID: String
+    let sourcePath: String
+    let errorDescription: String
 }
 
 enum PetPackageError: Error, CustomStringConvertible {
     case missingBundledDefaultPet
     case invalidSpritesheetPath(String)
+    case missingSpritesheet(String)
 
     var description: String {
         switch self {
@@ -219,6 +299,8 @@ enum PetPackageError: Error, CustomStringConvertible {
             "Bundled default pet manifest is missing."
         case .invalidSpritesheetPath(let path):
             "Invalid spritesheetPath in pet manifest: \(path)."
+        case .missingSpritesheet(let path):
+            "Missing source spritesheet: \(path)."
         }
     }
 }

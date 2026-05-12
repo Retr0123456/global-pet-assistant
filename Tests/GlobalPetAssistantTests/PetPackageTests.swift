@@ -80,6 +80,59 @@ struct PetPackageTests {
         #expect(PetPackage.preferredPackage(from: packages, selectedPetID: "missing")?.id == "alpha")
     }
 
+    @Test
+    func testSyncFromImportSourcesCopiesCodexPetPackage() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sourceRoot = root.appendingPathComponent("codex-pets", isDirectory: true)
+        let destinationRoot = root.appendingPathComponent("app-pets", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        _ = try makePackage(
+            root: sourceRoot,
+            directoryName: "neon",
+            id: "neon",
+            displayName: "Neon"
+        )
+
+        let summary = PetPackage.syncFromImportSources([sourceRoot], destinationRoot: destinationRoot)
+        let syncedPackage = try PetPackage.load(
+            from: destinationRoot.appendingPathComponent("neon", isDirectory: true)
+        )
+
+        #expect(summary.syncedPackageIDs == ["neon"])
+        #expect(summary.failedPackages.isEmpty)
+        #expect(syncedPackage.id == "neon")
+        #expect(FileManager.default.fileExists(atPath: syncedPackage.spritesheetURL.path))
+    }
+
+    @Test
+    func testSyncFromImportSourcesSkipsUnchangedPackage() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sourceRoot = root.appendingPathComponent("codex-pets", isDirectory: true)
+        let destinationRoot = root.appendingPathComponent("app-pets", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        _ = try makePackage(
+            root: sourceRoot,
+            directoryName: "steady",
+            id: "steady",
+            displayName: "Steady"
+        )
+
+        let firstSummary = PetPackage.syncFromImportSources([sourceRoot], destinationRoot: destinationRoot)
+        let secondSummary = PetPackage.syncFromImportSources([sourceRoot], destinationRoot: destinationRoot)
+
+        #expect(firstSummary.syncedPackageIDs == ["steady"])
+        #expect(secondSummary.syncedPackageIDs.isEmpty)
+        #expect(secondSummary.failedPackages.isEmpty)
+    }
+
     private func makePackage(
         root: URL,
         directoryName: String,
@@ -98,6 +151,7 @@ struct PetPackageTests {
         }
         """
         try Data(manifest.utf8).write(to: directory.appendingPathComponent("pet.json"))
+        try Data("fake-spritesheet".utf8).write(to: directory.appendingPathComponent("spritesheet.webp"))
 
         return try PetPackage.load(from: directory)
     }

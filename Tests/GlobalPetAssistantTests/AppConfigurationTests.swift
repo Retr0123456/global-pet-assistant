@@ -35,4 +35,18 @@ struct AppConfigurationTests {
             $0.hasSuffix("/.codex/pets")
         })
     }
+
+    @Test
+    func testPetImportSourceDirectoryURLsExpandsHomeAndDeduplicates() {
+        let configuration = AppConfiguration(
+            trustedSources: [:],
+            petImportSourceDirectories: ["~/.codex/pets", "~/.codex/pets"]
+        )
+
+        let urls = configuration.petImportSourceDirectoryURLs()
+
+        #expect(urls.count == 1)
+        #expect(urls.first?.path.hasSuffix("/.codex/pets") == true)
+        #expect(urls.first?.path.hasPrefix("~") == false)
+    }
 }

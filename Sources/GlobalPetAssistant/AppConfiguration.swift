@@ -90,6 +90,20 @@ struct AppConfiguration: Codable, Equatable {
         return configuration
     }
 
+    func petImportSourceDirectoryURLs() -> [URL] {
+        var seen: Set<String> = []
+        return petImportSourceDirectories
+            .map(Self.expandUserPath)
+            .map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+            .filter { url in
+                guard !seen.contains(url.path) else {
+                    return false
+                }
+                seen.insert(url.path)
+                return true
+            }
+    }
+
     static func normalizedSource(_ rawSource: String) -> String {
         let trimmed = rawSource.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "unknown" : trimmed
@@ -113,6 +127,20 @@ struct AppConfiguration: Codable, Equatable {
                 .standardizedFileURL
                 .path
         ]
+    }
+
+    private static func expandUserPath(_ path: String) -> String {
+        if path == "~" {
+            return FileManager.default.homeDirectoryForCurrentUser.path
+        }
+
+        if path.hasPrefix("~/") {
+            return FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(String(path.dropFirst(2)))
+                .path
+        }
+
+        return path
     }
 }
 

@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             appConfiguration = AppStorage.loadConfiguration()
             authorizationToken = try AppStorage.loadOrCreateToken()
             eventPreferences = AppStorage.loadEventPreferences()
+            syncPetsFromConfiguredSources()
             let (package, atlas) = try loadDisplayPet()
             NSLog("GlobalPetAssistant loaded pet '\(package.id)' from \(package.directoryURL.path)")
             AuditLogger.appendRuntime(status: "pet_loaded", message: "\(package.id) \(package.directoryURL.path)")
@@ -253,6 +254,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openPetFolder() {
         NSWorkspace.shared.open(AppStorage.petsDirectory)
+    }
+
+    @objc private func syncPetsFromCodex() {
+        syncPetsFromConfiguredSources()
+        rebuildSwitchPetMenu()
     }
 
     @objc private func selectPet(_ sender: NSMenuItem) {
@@ -488,6 +494,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return package
     }
 
+    private func syncPetsFromConfiguredSources() {
+        let sourceDirectories = appConfiguration.petImportSourceDirectoryURLs()
+        guard !sourceDirectories.isEmpty else {
+            return
+        }
+
+        let summary = PetPackage.syncFromImportSources(sourceDirectories)
+        if !summary.syncedPackageIDs.isEmpty {
+            AuditLogger.appendRuntime(
+                status: "pet_sync_completed",
+                message: summary.syncedPackageIDs.joined(separator: ",")
+            )
+        }
+        for failure in summary.failedPackages {
+            NSLog("GlobalPetAssistant could not sync pet '\(failure.packageID)' from \(failure.sourcePath): \(failure.errorDescription)")
+            AuditLogger.appendRuntime(
+                status: "pet_sync_failed",
+                message: "\(failure.packageID) \(failure.sourcePath) \(failure.errorDescription)"
+            )
+        }
+    }
+
     private func makePetContextMenu() -> NSMenu {
         let menu = NSMenu()
         let snapshot = eventRouter?.snapshot
@@ -558,6 +586,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func makeSwitchPetSubmenu() -> NSMenu {
         let submenu = NSMenu()
+        let syncItem = NSMenuItem(title: "Sync from Codex", action: #selector(syncPetsFromCodex), keyEquivalent: "")
+        syncItem.target = self
+        syncItem.isEnabled = !appConfiguration.petImportSourceDirectoryURLs().isEmpty
+        submenu.addItem(syncItem)
+        submenu.addItem(NSMenuItem.separator())
+
+        syncPetsFromConfiguredSources()
         let packages = PetPackage.sortedForDisplay(loadRenderablePetPackages().map { $0.package })
 
         guard !packages.isEmpty else {
