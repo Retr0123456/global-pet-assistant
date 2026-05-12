@@ -7,9 +7,9 @@ enum PetDragDirection {
     var animationState: PetAnimationState {
         switch self {
         case .left:
-            .runningLeft
-        case .right:
             .runningRight
+        case .right:
+            .runningLeft
         }
     }
 }
@@ -80,7 +80,7 @@ final class PetBehaviorController {
         case .danger:
             animationState = .failed
         case .success:
-            animationState = state == .review ? .waving : state
+            animationState = state
         case .warning, .running, .info:
             animationState = state
         }

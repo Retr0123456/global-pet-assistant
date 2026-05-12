@@ -218,7 +218,7 @@ struct EventRouterTests {
     }
 
     @Test
-    func testTTLExpiryReturnsRouterToIdle() {
+    func testThreadEventsPersistUntilDismissedEvenWhenTTLIsProvided() {
         var now = Date(timeIntervalSince1970: 1_000)
         let router = EventRouter(now: { now }, onStateChange: { _ in })
 
@@ -228,7 +228,12 @@ struct EventRouterTests {
         now = now.addingTimeInterval(1.1)
         let snapshot = router.snapshot
 
-        #expect(snapshot.activeEventCount == 0)
+        #expect(snapshot.activeEventCount == 1)
+        #expect(snapshot.activeThreads.first?.source == "codex-cli")
+        #expect(router.currentState == PetAnimationState.running)
+
+        router.clearSource("codex-cli")
+        #expect(router.snapshot.activeEventCount == 0)
         #expect(router.currentState == PetAnimationState.idle)
     }
 
@@ -318,7 +323,7 @@ struct EventRouterTests {
         let snapshot = router.snapshot
         #expect(snapshot.activeEventCount == 0)
         #expect(snapshot.flashMessages.first?.message == "legacy transient")
-        #expect(snapshot.flashMessages.first?.state == .waving)
+        #expect(snapshot.flashMessages.first?.state == .review)
         #expect(router.currentState == .idle)
     }
 }

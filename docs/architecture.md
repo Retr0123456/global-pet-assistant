@@ -129,6 +129,10 @@ Recommended event schema:
 }
 ```
 
+Long-lived thread notifications stay in the thread panel until the user
+dismisses them. `ttlMs` is retained for compatibility with existing event
+payloads, but the router only applies TTL expiry to transient flash messages.
+
 ## State Machine
 
 Global notifications can conflict, so the pet needs explicit state priority:
@@ -142,7 +146,8 @@ Rules:
 - Track state by source.
 - Let newer events from the same source replace old running states.
 - Preserve failed and waiting states longer than running states.
-- Auto-expire running states.
+- Keep thread notifications until the user dismisses them.
+- Auto-expire transient flash messages.
 - Deduplicate repeated notifications by `dedupeKey`.
 - Rate limit noisy sources.
 - Fall back to `idle` when no active notification remains.

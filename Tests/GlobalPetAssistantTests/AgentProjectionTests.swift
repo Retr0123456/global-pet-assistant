@@ -45,5 +45,6 @@ struct AgentProjectionTests {
         #expect(event.dedupeKey == "agent-session:very-long-codex-session-id")
         #expect(event.level == .success)
         #expect(event.state == .review)
+        #expect(event.ttlMs == nil)
     }
 }

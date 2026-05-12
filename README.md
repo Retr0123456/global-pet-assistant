@@ -160,6 +160,10 @@ legacy compatibility instructions live in the
 
 `/healthz` returns the app liveness status plus the router snapshot (`state` and `activeEvents`) so scripts can distinguish a reachable app from an idle or busy pet.
 
+Thread panel notifications are long-lived: they stay visible until the user
+dismisses the row with the panel close button. Transient flash messages still
+use short TTL expiry.
+
 `GET /healthz` does not require authentication. `POST /events` requires a local
 bearer token from `~/.global-pet-assistant/token`. The app creates that token on
 first launch with file permissions set to `0600`, and `petctl` reads it
