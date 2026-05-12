@@ -66,18 +66,13 @@ final class EventRouter {
             removeEvent(forSource: existingSource)
         }
 
-        guard let expiresAt = expirationDate(for: event) else {
-            updateCurrentState()
-            return currentState
-        }
-
         sequence += 1
         let routedEvent = RoutedEvent(
             event: event,
             state: event.resolvedPetState,
             priority: priority(for: event.resolvedPetState),
             sequence: sequence,
-            expiresAt: expiresAt
+            expiresAt: nil
         )
         eventsBySource[event.source] = routedEvent
 
@@ -259,15 +254,6 @@ final class EventRouter {
         }
     }
 
-    private func expirationDate(for event: LocalPetEvent) -> Date? {
-        let ttlMs = event.ttlMs ?? defaultTTL(for: event.resolvedPetState)
-        guard ttlMs > 0 else {
-            return nil
-        }
-
-        return now().addingTimeInterval(TimeInterval(ttlMs) / 1000)
-    }
-
     private func expirationDate(forFlash event: LocalPetEvent) -> Date? {
         let ttlMs = event.ttlMs ?? Self.defaultFlashTTL
         guard ttlMs > 0 else {
@@ -275,19 +261,6 @@ final class EventRouter {
         }
 
         return now().addingTimeInterval(TimeInterval(ttlMs) / 1000)
-    }
-
-    private func defaultTTL(for state: PetAnimationState) -> Int {
-        switch state {
-        case .failed, .waiting:
-            120_000
-        case .review:
-            45_000
-        case .running, .runningLeft, .runningRight, .jumping, .waving:
-            15_000
-        case .idle:
-            0
-        }
     }
 
     private func priority(for state: PetAnimationState) -> Int {

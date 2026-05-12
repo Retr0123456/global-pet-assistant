@@ -409,9 +409,10 @@ final class PetWindowContentView: NSView {
             removeTrackingArea(hoverTrackingArea)
         }
 
+        layoutSubtreeIfNeeded()
         let trackingArea = NSTrackingArea(
-            rect: bounds,
-            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            rect: petView.frame,
+            options: [.activeAlways, .mouseEnteredAndExited],
             owner: self,
             userInfo: nil
         )

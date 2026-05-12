@@ -237,7 +237,7 @@ struct LocalPetEvent: Codable, Equatable {
         case .warning:
             return .waiting
         case .success:
-            return .waving
+            return .review
         case .running:
             return .jumping
         case .info, .none:

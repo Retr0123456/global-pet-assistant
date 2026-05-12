@@ -9,7 +9,6 @@ enum AgentEventProjection {
             title: session.title ?? "\(session.kind.rawValue) session",
             message: session.pendingPermissionDescription ?? session.message,
             state: state(for: session),
-            ttlMs: ttl(for: session),
             dedupeKey: "agent-session:\(session.id)",
             cwd: session.cwd
         )
@@ -49,21 +48,6 @@ enum AgentEventProjection {
             return .failed
         case .unknown:
             return .idle
-        }
-    }
-
-    private static func ttl(for session: AgentSession) -> Int {
-        switch session.status {
-        case .waiting:
-            return 120_000
-        case .completed:
-            return 45_000
-        case .failed:
-            return 120_000
-        case .started, .running:
-            return 15_000
-        case .unknown:
-            return 5_000
         }
     }
 
