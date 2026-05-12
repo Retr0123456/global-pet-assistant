@@ -186,7 +186,10 @@ final class PetSpriteView: NSView {
             return
         }
 
-        configureSpriteLayer()
+        if spriteLayer.superlayer == nil {
+            configureSpriteLayer()
+        }
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         spriteLayer.contentsRect = currentFrames[frameIndex].contentsRect

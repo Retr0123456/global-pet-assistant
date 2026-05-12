@@ -95,9 +95,8 @@ final class FloatingPetWindow: NSPanel {
     }
 
     init(contentView petView: PetSpriteView, savedOrigin: StoredWindowOrigin?) {
-        let size = petView.intrinsicContentSize
-        let frame = FloatingPetWindow.initialFrame(size: size, savedOrigin: savedOrigin)
         let contentView = PetWindowContentView(wrapping: petView)
+        let frame = FloatingPetWindow.initialFrame(size: contentView.desiredContentSize, savedOrigin: savedOrigin)
         self.petContentView = contentView
 
         super.init(
@@ -145,8 +144,12 @@ final class FloatingPetWindow: NSPanel {
         petContentView.updateFocusTimerSnapshot(snapshot)
     }
 
-    func applyUserInterfacePreferences(_ preferences: UserInterfacePreferences) {
+    func applyUserInterfacePreferences(_ preferences: UserInterfacePreferences, display: Bool = false) {
         petContentView.applyUserInterfacePreferences(preferences)
+    }
+
+    func showPetResizeControl() {
+        petContentView.setPetResizeControlVisible(true)
     }
 
     private func fitToContentPreservingTopRight() {
@@ -251,6 +254,12 @@ final class PetWindowContentView: NSView {
         case trailing
     }
 
+    private struct PetResizeAnchor {
+        let horizontalPlacement: HorizontalPlacement
+        let edgeX: CGFloat
+        let midY: CGFloat
+    }
+
     private enum ThreadPanelVerticalPlacement {
         case abovePet
         case belowPet
@@ -268,6 +277,14 @@ final class PetWindowContentView: NSView {
     private static let flashStackSpacing: CGFloat = 6
     private static let flashPetGap: CGFloat = 8
     private static let flashTopOffset: CGFloat = 8
+    private static let scaleControlWidth: CGFloat = 26
+    private static let scaleControlTrackHeight: CGFloat = 92
+    private static let scaleControlCloseButtonSize: CGFloat = 18
+    private static let scaleControlSpacing: CGFloat = 5
+    private static let scaleControlGap: CGFloat = 6
+    private static var scaleControlHeight: CGFloat {
+        scaleControlCloseButtonSize + scaleControlSpacing + scaleControlTrackHeight
+    }
 
     var onClick: (() -> Void)?
     var onHoverChanged: ((Bool) -> Void)?
@@ -289,9 +306,11 @@ final class PetWindowContentView: NSView {
 
     var desiredContentSize: NSSize {
         let petSize = petView.intrinsicContentSize
+        let scaleControlSideWidth = isPetResizeControlVisible ? Self.scaleControlWidth + Self.scaleControlGap : 0
         let flashSideWidth = hasSideStack ? Self.flashStackWidth + Self.flashPetGap : 0
-        let primaryWidth = petSize.width + flashSideWidth
-        let primaryHeight = max(petSize.height, flashStackHeight + Self.flashTopOffset)
+        let primaryWidth = petSize.width + scaleControlSideWidth + flashSideWidth
+        let resizeControlHeight = isPetResizeControlVisible ? Self.scaleControlHeight : 0
+        let primaryHeight = max(petSize.height, resizeControlHeight, flashStackHeight + Self.flashTopOffset)
 
         guard isThreadPanelExpanded else {
             return NSSize(width: primaryWidth, height: primaryHeight)
@@ -304,6 +323,9 @@ final class PetWindowContentView: NSView {
     }
 
     private let petView: PetSpriteView
+    private let petScaleControlContainer = NSView()
+    private let petScaleControl = PetScaleControlView()
+    private let petScaleCloseButton = NSButton()
     private let threadBadgeButton = ThreadBadgeEffectButton()
     private let threadPanelView = NSView()
     private let threadPanelContentView = NSView()
@@ -321,12 +343,15 @@ final class PetWindowContentView: NSView {
     private var petWidthConstraint: NSLayoutConstraint?
     private var petHeightConstraint: NSLayoutConstraint?
     private var threadPanelWidthConstraint: NSLayoutConstraint?
-    private var flashLeadingConstraint: NSLayoutConstraint?
-    private var flashTrailingConstraint: NSLayoutConstraint?
+    private var scaleControlLeadingConstraint: NSLayoutConstraint?
+    private var scaleControlTrailingConstraint: NSLayoutConstraint?
+    private var flashLeadingFromPetConstraint: NSLayoutConstraint?
+    private var flashLeadingFromScaleControlConstraint: NSLayoutConstraint?
+    private var flashTrailingFromPetConstraint: NSLayoutConstraint?
+    private var flashTrailingFromScaleControlConstraint: NSLayoutConstraint?
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
     private var mouseDownPetScreenOrigin: NSPoint?
-    private var mouseDownPetSize: NSSize?
     private var didMouseDownOnPet = false
     private var didDrag = false
     private let clickMovementThreshold: CGFloat = 5
@@ -335,6 +360,7 @@ final class PetWindowContentView: NSView {
     private var threadSnapshot: ThreadPanelSnapshot?
     private var focusTimerSnapshot: FocusTimerSnapshot?
     private var isThreadPanelExpanded = false
+    private var isPetResizeControlVisible = false
     private var userInterfacePreferences = UserInterfacePreferences()
     private var horizontalPlacement: HorizontalPlacement = .trailing
     private var threadPanelVerticalPlacement: ThreadPanelVerticalPlacement = .belowPet
@@ -354,6 +380,7 @@ final class PetWindowContentView: NSView {
         addSubview(petView)
         petView.translatesAutoresizingMaskIntoConstraints = false
 
+        configurePetScaleControl()
         configureThreadBadgeButton()
         configureThreadPanel()
         configureFlashStack()
@@ -374,12 +401,28 @@ final class PetWindowContentView: NSView {
         )
         let threadPanelLeadingConstraint = threadPanelView.leadingAnchor.constraint(equalTo: petView.leadingAnchor)
         let threadPanelTrailingConstraint = threadPanelView.trailingAnchor.constraint(equalTo: petView.trailingAnchor)
-        let flashLeadingConstraint = flashStackView.leadingAnchor.constraint(
+        let scaleControlLeadingConstraint = petScaleControlContainer.leadingAnchor.constraint(
+            equalTo: petView.trailingAnchor,
+            constant: Self.scaleControlGap
+        )
+        let scaleControlTrailingConstraint = petScaleControlContainer.trailingAnchor.constraint(
+            equalTo: petView.leadingAnchor,
+            constant: -Self.scaleControlGap
+        )
+        let flashLeadingFromPetConstraint = flashStackView.leadingAnchor.constraint(
             equalTo: petView.trailingAnchor,
             constant: Self.flashPetGap
         )
-        let flashTrailingConstraint = flashStackView.trailingAnchor.constraint(
+        let flashLeadingFromScaleControlConstraint = flashStackView.leadingAnchor.constraint(
+            equalTo: petScaleControlContainer.trailingAnchor,
+            constant: Self.flashPetGap
+        )
+        let flashTrailingFromPetConstraint = flashStackView.trailingAnchor.constraint(
             equalTo: petView.leadingAnchor,
+            constant: -Self.flashPetGap
+        )
+        let flashTrailingFromScaleControlConstraint = flashStackView.trailingAnchor.constraint(
+            equalTo: petScaleControlContainer.leadingAnchor,
             constant: -Self.flashPetGap
         )
         self.petTopConstraint = petTopConstraint
@@ -390,8 +433,12 @@ final class PetWindowContentView: NSView {
         self.threadPanelBelowPetConstraint = threadPanelBelowPetConstraint
         self.threadPanelLeadingConstraint = threadPanelLeadingConstraint
         self.threadPanelTrailingConstraint = threadPanelTrailingConstraint
-        self.flashLeadingConstraint = flashLeadingConstraint
-        self.flashTrailingConstraint = flashTrailingConstraint
+        self.scaleControlLeadingConstraint = scaleControlLeadingConstraint
+        self.scaleControlTrailingConstraint = scaleControlTrailingConstraint
+        self.flashLeadingFromPetConstraint = flashLeadingFromPetConstraint
+        self.flashLeadingFromScaleControlConstraint = flashLeadingFromScaleControlConstraint
+        self.flashTrailingFromPetConstraint = flashTrailingFromPetConstraint
+        self.flashTrailingFromScaleControlConstraint = flashTrailingFromScaleControlConstraint
 
         let petWidthConstraint = petView.widthAnchor.constraint(equalToConstant: petView.intrinsicContentSize.width)
         let petHeightConstraint = petView.heightAnchor.constraint(equalToConstant: petView.intrinsicContentSize.height)
@@ -408,6 +455,10 @@ final class PetWindowContentView: NSView {
             threadBadgeButton.trailingAnchor.constraint(equalTo: petView.trailingAnchor),
             threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.badgeSize),
             threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.badgeSize),
+
+            petScaleControlContainer.centerYAnchor.constraint(equalTo: petView.centerYAnchor),
+            petScaleControlContainer.widthAnchor.constraint(equalToConstant: Self.scaleControlWidth),
+            petScaleControlContainer.heightAnchor.constraint(equalToConstant: Self.scaleControlHeight),
 
             threadPanelWidthConstraint,
             panelHeightConstraint,
@@ -460,7 +511,6 @@ final class PetWindowContentView: NSView {
         mouseDownScreenPoint = window?.convertPoint(toScreen: event.locationInWindow)
         mouseDownWindowOrigin = window?.frame.origin
         mouseDownPetScreenOrigin = petScreenFrame()?.origin
-        mouseDownPetSize = petView.intrinsicContentSize
         didDrag = false
     }
 
@@ -482,14 +532,6 @@ final class PetWindowContentView: NSView {
             x: currentScreenPoint.x - mouseDownScreenPoint.x,
             y: currentScreenPoint.y - mouseDownScreenPoint.y
         )
-        if userInterfacePreferences.isPetResizeModeEnabled,
-           let mouseDownPetSize,
-           let mouseDownPetScreenOrigin {
-            resizePet(from: mouseDownPetSize, anchoredAt: mouseDownPetScreenOrigin, delta: delta)
-            didDrag = true
-            return
-        }
-
         if let mouseDownPetScreenOrigin {
             let desiredPetOrigin = NSPoint(
                 x: mouseDownPetScreenOrigin.x + delta.x,
@@ -530,8 +572,6 @@ final class PetWindowContentView: NSView {
         let movedDistance = mouseDownScreenPoint?.distance(to: mouseUpScreenPoint) ?? 0
         if didMouseDownOnPet && !didDrag && movedDistance <= clickMovementThreshold {
             onClick?()
-        } else if didMouseDownOnPet, userInterfacePreferences.isPetResizeModeEnabled {
-            onDragChanged?(nil)
         } else if didMouseDownOnPet {
             let settledFrame = FloatingPetWindow.settledFrame(window.frame)
             window.setFrame(settledFrame, display: true)
@@ -561,29 +601,8 @@ final class PetWindowContentView: NSView {
         mouseDownScreenPoint = nil
         mouseDownWindowOrigin = nil
         mouseDownPetScreenOrigin = nil
-        mouseDownPetSize = nil
         didMouseDownOnPet = false
         didDrag = false
-    }
-
-    private func resizePet(from startSize: NSSize, anchoredAt screenOrigin: NSPoint, delta: NSPoint) {
-        let dominantDelta = max(delta.x, -delta.y)
-        let requestedWidth = startSize.width + dominantDelta
-        let requestedScale = requestedWidth / PetSpriteView.baseDisplaySize.width
-        let nextScale = min(
-            CGFloat(UserInterfacePreferences.maximumPetScale),
-            max(CGFloat(UserInterfacePreferences.minimumPetScale), requestedScale)
-        )
-
-        guard abs(CGFloat(userInterfacePreferences.petScale) - nextScale) > 0.001 else {
-            return
-        }
-
-        var nextPreferences = userInterfacePreferences
-        nextPreferences.petScale = Double(nextScale)
-        applyUserInterfacePreferences(nextPreferences)
-        placePet(at: screenOrigin, display: true)
-        onPetScaleChanged?(Double(nextScale))
     }
 
     private func updatePetSizeConstraints() {
@@ -593,24 +612,51 @@ final class PetWindowContentView: NSView {
     }
 
     func applyUserInterfacePreferences(_ preferences: UserInterfacePreferences) {
+        applyUserInterfacePreferences(preferences, display: false)
+    }
+
+    private func applyUserInterfacePreferences(_ preferences: UserInterfacePreferences, display: Bool) {
         let preferences = preferences.clamped()
-        let previousPetOrigin = petScreenFrame()?.origin
+        let previousPetAnchor = petResizeAnchor()
         let previousSize = desiredContentSize
         userInterfacePreferences = preferences
-        threadPanelView.alphaValue = CGFloat(preferences.threadPanelOpacity)
+        petScaleControl.scale = preferences.petScale
         petView.setDisplayScaleMultiplier(CGFloat(preferences.petScale))
         updatePetSizeConstraints()
         updateThreadPanelHeight()
-        applyFloatingSurfacePlacement(preservingPetPosition: true)
-
-        if let previousPetOrigin {
-            placePet(at: previousPetOrigin, display: false)
-        }
+        applyFloatingSurfacePlacement()
 
         let nextSize = desiredContentSize
         if previousSize != nextSize {
             frame.size = nextSize
             onDesiredSizeChanged?()
+        }
+
+        if let previousPetAnchor {
+            placePet(at: previousPetAnchor, display: display)
+        }
+    }
+
+    func setPetResizeControlVisible(_ isVisible: Bool) {
+        guard isPetResizeControlVisible != isVisible else {
+            return
+        }
+
+        let previousPetAnchor = petResizeAnchor()
+        let previousSize = desiredContentSize
+        isPetResizeControlVisible = isVisible
+        petScaleControlContainer.isHidden = !isVisible
+        updateFloatingSurfacePlacement()
+        applyFloatingSurfacePlacement()
+
+        let nextSize = desiredContentSize
+        if previousSize != nextSize {
+            frame.size = nextSize
+            onDesiredSizeChanged?()
+        }
+
+        if let previousPetAnchor {
+            placePet(at: previousPetAnchor, display: true)
         }
     }
 
@@ -723,6 +769,63 @@ final class PetWindowContentView: NSView {
         flashStackView.isHidden = true
     }
 
+    private func configurePetScaleControl() {
+        addSubview(petScaleControlContainer)
+        petScaleControlContainer.translatesAutoresizingMaskIntoConstraints = false
+        petScaleControlContainer.isHidden = true
+        petScaleControlContainer.wantsLayer = true
+        petScaleControlContainer.layer?.backgroundColor = NSColor.clear.cgColor
+
+        petScaleControlContainer.addSubview(petScaleCloseButton)
+        petScaleCloseButton.translatesAutoresizingMaskIntoConstraints = false
+        petScaleCloseButton.isBordered = false
+        petScaleCloseButton.bezelStyle = .regularSquare
+        petScaleCloseButton.focusRingType = .none
+        petScaleCloseButton.image = NSImage(
+            systemSymbolName: "xmark.circle.fill",
+            accessibilityDescription: "Close resize control"
+        )
+        petScaleCloseButton.imagePosition = .imageOnly
+        petScaleCloseButton.imageScaling = .scaleProportionallyDown
+        petScaleCloseButton.contentTintColor = NSColor.secondaryLabelColor
+        petScaleCloseButton.target = self
+        petScaleCloseButton.action = #selector(closePetResizeControl)
+        petScaleCloseButton.setButtonType(.momentaryPushIn)
+
+        petScaleControlContainer.addSubview(petScaleControl)
+        petScaleControl.translatesAutoresizingMaskIntoConstraints = false
+        petScaleControl.onScaleChanged = { [weak self] scale in
+            guard let self else {
+                return
+            }
+
+            var nextPreferences = self.userInterfacePreferences
+            nextPreferences.petScale = scale
+            self.applyUserInterfacePreferences(nextPreferences, display: true)
+            self.onPetScaleChanged?(self.userInterfacePreferences.petScale)
+        }
+
+        NSLayoutConstraint.activate([
+            petScaleCloseButton.topAnchor.constraint(equalTo: petScaleControlContainer.topAnchor),
+            petScaleCloseButton.centerXAnchor.constraint(equalTo: petScaleControlContainer.centerXAnchor),
+            petScaleCloseButton.widthAnchor.constraint(equalToConstant: Self.scaleControlCloseButtonSize),
+            petScaleCloseButton.heightAnchor.constraint(equalToConstant: Self.scaleControlCloseButtonSize),
+
+            petScaleControl.topAnchor.constraint(
+                equalTo: petScaleCloseButton.bottomAnchor,
+                constant: Self.scaleControlSpacing
+            ),
+            petScaleControl.centerXAnchor.constraint(equalTo: petScaleControlContainer.centerXAnchor),
+            petScaleControl.widthAnchor.constraint(equalToConstant: Self.scaleControlWidth),
+            petScaleControl.heightAnchor.constraint(equalToConstant: Self.scaleControlTrackHeight),
+            petScaleControl.bottomAnchor.constraint(equalTo: petScaleControlContainer.bottomAnchor)
+        ])
+    }
+
+    @objc private func closePetResizeControl() {
+        setPetResizeControlVisible(false)
+    }
+
     private func updateFloatingSurfacePlacement(forPetScreenFrame petScreenFrame: NSRect? = nil) {
         guard let window else {
             return
@@ -772,18 +875,32 @@ final class PetWindowContentView: NSView {
 
         petLeadingConstraint?.isActive = false
         petTrailingConstraint?.isActive = false
-        flashLeadingConstraint?.isActive = false
-        flashTrailingConstraint?.isActive = false
+        scaleControlLeadingConstraint?.isActive = false
+        scaleControlTrailingConstraint?.isActive = false
+        flashLeadingFromPetConstraint?.isActive = false
+        flashLeadingFromScaleControlConstraint?.isActive = false
+        flashTrailingFromPetConstraint?.isActive = false
+        flashTrailingFromScaleControlConstraint?.isActive = false
 
         if horizontalPlacement == .leading {
             petLeadingConstraint?.isActive = true
+            scaleControlLeadingConstraint?.isActive = true
             if hasMessages {
-                flashLeadingConstraint?.isActive = true
+                if isPetResizeControlVisible {
+                    flashLeadingFromScaleControlConstraint?.isActive = true
+                } else {
+                    flashLeadingFromPetConstraint?.isActive = true
+                }
             }
         } else {
             petTrailingConstraint?.isActive = true
+            scaleControlTrailingConstraint?.isActive = true
             if hasMessages {
-                flashTrailingConstraint?.isActive = true
+                if isPetResizeControlVisible {
+                    flashTrailingFromScaleControlConstraint?.isActive = true
+                } else {
+                    flashTrailingFromPetConstraint?.isActive = true
+                }
             }
         }
     }
@@ -843,6 +960,27 @@ final class PetWindowContentView: NSView {
         )
     }
 
+    private func petResizeAnchor() -> PetResizeAnchor? {
+        guard let petFrame = petScreenFrame() else {
+            return nil
+        }
+
+        switch horizontalPlacement {
+        case .leading:
+            return PetResizeAnchor(
+                horizontalPlacement: .leading,
+                edgeX: petFrame.minX,
+                midY: petFrame.midY
+            )
+        case .trailing:
+            return PetResizeAnchor(
+                horizontalPlacement: .trailing,
+                edgeX: petFrame.maxX,
+                midY: petFrame.midY
+            )
+        }
+    }
+
     private func placePet(at screenOrigin: NSPoint, display: Bool) {
         guard let window else {
             return
@@ -853,6 +991,29 @@ final class PetWindowContentView: NSView {
         let nextFrame = NSRect(
             x: screenOrigin.x - petFrameInWindow.minX,
             y: screenOrigin.y - petFrameInWindow.minY,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        window.setFrame(FloatingPetWindow.constrainedFrame(nextFrame), display: display)
+    }
+
+    private func placePet(at anchor: PetResizeAnchor, display: Bool) {
+        guard let window else {
+            return
+        }
+
+        layoutSubtreeIfNeeded()
+        let petFrameInWindow = convert(petView.frame, to: nil)
+        let nextOriginX: CGFloat
+        switch anchor.horizontalPlacement {
+        case .leading:
+            nextOriginX = anchor.edgeX - petFrameInWindow.minX
+        case .trailing:
+            nextOriginX = anchor.edgeX - petFrameInWindow.maxX
+        }
+        let nextFrame = NSRect(
+            x: nextOriginX,
+            y: anchor.midY - petFrameInWindow.midY,
             width: window.frame.width,
             height: window.frame.height
         )
@@ -928,6 +1089,108 @@ final class PetWindowContentView: NSView {
 
     private func updateThreadPanelHeight() {
         threadPanelHeightConstraint?.constant = currentThreadPanelHeight
+    }
+}
+
+private final class PetScaleControlView: NSView {
+    private static let verticalPadding: CGFloat = 10
+    private static let trackWidth: CGFloat = 4
+    private static let knobSize: CGFloat = 15
+
+    var onScaleChanged: ((Double) -> Void)?
+    private var storedScale = UserInterfacePreferences.defaultPetScale
+
+    var scale: Double {
+        get {
+            storedScale
+        }
+        set {
+            storedScale = UserInterfacePreferences(petScale: newValue).clamped().petScale
+            needsDisplay = true
+        }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        updateScale(from: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        updateScale(from: event)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let travelHeight = max(1, bounds.height - Self.verticalPadding * 2)
+        let normalized = CGFloat(
+            (scale - UserInterfacePreferences.minimumPetScale)
+                / (UserInterfacePreferences.maximumPetScale - UserInterfacePreferences.minimumPetScale)
+        )
+        let knobCenterY = Self.verticalPadding + normalized * travelHeight
+        let trackX = bounds.midX - Self.trackWidth / 2
+        let trackRect = NSRect(
+            x: trackX,
+            y: Self.verticalPadding,
+            width: Self.trackWidth,
+            height: travelHeight
+        )
+        let activeRect = NSRect(
+            x: trackX,
+            y: Self.verticalPadding,
+            width: Self.trackWidth,
+            height: max(2, knobCenterY - Self.verticalPadding)
+        )
+        let knobRect = NSRect(
+            x: bounds.midX - Self.knobSize / 2,
+            y: knobCenterY - Self.knobSize / 2,
+            width: Self.knobSize,
+            height: Self.knobSize
+        )
+
+        NSColor.black.withAlphaComponent(0.45).setFill()
+        NSBezierPath(roundedRect: trackRect, xRadius: 2, yRadius: 2).fill()
+
+        NSColor.systemTeal.withAlphaComponent(0.9).setFill()
+        NSBezierPath(roundedRect: activeRect, xRadius: 2, yRadius: 2).fill()
+
+        NSColor.black.withAlphaComponent(0.32).setFill()
+        NSBezierPath(ovalIn: knobRect.insetBy(dx: -2, dy: -2)).fill()
+
+        NSColor.windowBackgroundColor.withAlphaComponent(0.92).setFill()
+        NSBezierPath(ovalIn: knobRect).fill()
+
+        NSColor.systemTeal.withAlphaComponent(0.95).setStroke()
+        let knobPath = NSBezierPath(ovalIn: knobRect.insetBy(dx: 0.5, dy: 0.5))
+        knobPath.lineWidth = 1.5
+        knobPath.stroke()
+    }
+
+    private func updateScale(from event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let travelHeight = max(1, bounds.height - Self.verticalPadding * 2)
+        let normalized = min(
+            1,
+            max(0, (point.y - Self.verticalPadding) / travelHeight)
+        )
+        let nextScale = UserInterfacePreferences.minimumPetScale
+            + Double(normalized) * (UserInterfacePreferences.maximumPetScale - UserInterfacePreferences.minimumPetScale)
+
+        scale = nextScale
+        onScaleChanged?(scale)
     }
 }
 

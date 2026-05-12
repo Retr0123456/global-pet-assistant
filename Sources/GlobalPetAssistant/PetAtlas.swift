@@ -14,7 +14,6 @@ enum PetAnimationState: String, CaseIterable, Codable {
 
     static let previewMenuStates: [PetAnimationState] = [
         .idle,
-        .running,
         .waiting,
         .failed,
         .review,
@@ -132,13 +131,17 @@ struct PetAtlas {
     }
 
     static func makeFrames(for state: PetAnimationState) -> [PetAtlasFrame] {
-        (0..<state.frameCount).map { column in
+        // Pet atlas rows are documented from top to bottom, while CALayer.contentsRect
+        // uses a bottom-origin unit coordinate space.
+        let contentsRectY = CGFloat(Self.rows - state.row - 1) / CGFloat(Self.rows)
+
+        return (0..<state.frameCount).map { column in
             PetAtlasFrame(
                 column: column,
                 row: state.row,
                 contentsRect: CGRect(
                     x: CGFloat(column) / CGFloat(Self.columns),
-                    y: CGFloat(state.row) / CGFloat(Self.rows),
+                    y: contentsRectY,
                     width: 1.0 / CGFloat(Self.columns),
                     height: 1.0 / CGFloat(Self.rows)
                 )

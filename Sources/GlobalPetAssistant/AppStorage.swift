@@ -28,9 +28,6 @@ enum AppStorage {
     private static let windowOriginURL = rootDirectory
         .appendingPathComponent("window-origin.json")
 
-    private static let eventPreferencesURL = rootDirectory
-        .appendingPathComponent("event-preferences.json")
-
     private static let userInterfacePreferencesURL = rootDirectory
         .appendingPathComponent("ui-preferences.json")
 
@@ -70,22 +67,6 @@ enum AppStorage {
         try ensureLayout()
         let data = try JSONEncoder().encode(origin)
         try data.write(to: windowOriginURL, options: [.atomic])
-    }
-
-    static func loadEventPreferences() -> EventPreferences {
-        guard let data = try? Data(contentsOf: eventPreferencesURL),
-              let preferences = try? JSONDecoder().decode(EventPreferences.self, from: data)
-        else {
-            return EventPreferences()
-        }
-
-        return preferences
-    }
-
-    static func saveEventPreferences(_ preferences: EventPreferences) throws {
-        try ensureLayout()
-        let data = try JSONEncoder().encode(preferences)
-        try data.write(to: eventPreferencesURL, options: [.atomic])
     }
 
     static func loadUserInterfacePreferences() -> UserInterfacePreferences {
@@ -240,33 +221,15 @@ struct StoredWindowOrigin: Codable {
     let y: Double
 }
 
-struct EventPreferences: Codable {
-    var isPaused = false
-    var mutedSources: [String] = []
-
-    var mutedSourceSet: Set<String> {
-        Set(mutedSources)
-    }
-}
-
 struct UserInterfacePreferences: Codable, Equatable {
-    static let minimumThreadPanelOpacity = 0.35
-    static let maximumThreadPanelOpacity = 1.0
-    static let defaultThreadPanelOpacity = 0.92
     static let minimumPetScale = 0.65
     static let maximumPetScale = 1.8
     static let defaultPetScale = 1.0
 
-    var threadPanelOpacity = defaultThreadPanelOpacity
     var petScale = defaultPetScale
-    var isPetResizeModeEnabled = false
 
     func clamped() -> UserInterfacePreferences {
         var preferences = self
-        preferences.threadPanelOpacity = min(
-            Self.maximumThreadPanelOpacity,
-            max(Self.minimumThreadPanelOpacity, threadPanelOpacity)
-        )
         preferences.petScale = min(Self.maximumPetScale, max(Self.minimumPetScale, petScale))
         return preferences
     }

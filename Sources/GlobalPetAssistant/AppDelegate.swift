@@ -2,24 +2,17 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private static var sliderTargetsAssociationKey: UInt8 = 0
-
     private var petWindow: FloatingPetWindow?
     private var spriteView: PetSpriteView?
     private var petBehaviorController: PetBehaviorController?
     private var statusItem: NSStatusItem?
-    private var pauseEventsItem: NSMenuItem?
-    private var muteCurrentSourceItem: NSMenuItem?
-    private var unmuteAllSourcesItem: NSMenuItem?
     private var focusTimerMenuItem: NSMenuItem?
     private var switchPetMenuItem: NSMenuItem?
-    private var petResizeModeItem: NSMenuItem?
     private var eventRouter: EventRouter?
     private var focusTimerController: FocusTimerController?
     private var eventServer: LocalEventServer?
     private var agentDiscoveryService: AgentDiscoveryService?
     private let actionHandler = ActionHandler()
-    private var eventPreferences = EventPreferences()
     private var userInterfacePreferences = UserInterfacePreferences()
     private var appConfiguration = AppConfiguration.defaultConfiguration
     private var authorizationToken = ""
@@ -33,7 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             AuditLogger.appendRuntime(status: "app_launching", message: "GlobalPetAssistant applicationDidFinishLaunching")
             appConfiguration = AppStorage.loadConfiguration()
             authorizationToken = try AppStorage.loadOrCreateToken()
-            eventPreferences = AppStorage.loadEventPreferences()
             userInterfacePreferences = AppStorage.loadUserInterfacePreferences()
             let (package, atlas) = try loadDisplayPet()
             NSLog("GlobalPetAssistant loaded pet '\(package.id)' from \(package.directoryURL.path)")
@@ -75,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 ))
             }
             window.onPetScaleChanged = { [weak self] scale in
-                self?.updatePetScaleFromDrag(scale)
+                self?.updatePetScale(scale)
             }
             window.applyUserInterfacePreferences(userInterfacePreferences)
 
@@ -132,31 +124,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Show Pet", action: #selector(showPet), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Hide Pet", action: #selector(hidePet), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        let pauseEventsItem = NSMenuItem(title: "Pause Events", action: #selector(togglePauseEvents), keyEquivalent: "")
-        menu.addItem(pauseEventsItem)
-        self.pauseEventsItem = pauseEventsItem
-
-        let muteCurrentSourceItem = NSMenuItem(title: "Mute Current Source", action: #selector(muteCurrentSource), keyEquivalent: "")
-        menu.addItem(muteCurrentSourceItem)
-        self.muteCurrentSourceItem = muteCurrentSourceItem
-
-        let unmuteAllSourcesItem = NSMenuItem(title: "Unmute All Sources", action: #selector(unmuteAllSources), keyEquivalent: "")
-        menu.addItem(unmuteAllSourcesItem)
-        self.unmuteAllSourcesItem = unmuteAllSourcesItem
-        menu.addItem(NSMenuItem.separator())
-
         let focusTimerMenuItem = makeFocusTimerMenuItem()
         menu.addItem(focusTimerMenuItem)
         self.focusTimerMenuItem = focusTimerMenuItem
+        #if DEBUG
         menu.addItem(makePreviewStateMenuItem())
+        #endif
         let switchPetMenuItem = makeSwitchPetMenuItem()
         menu.addItem(switchPetMenuItem)
         self.switchPetMenuItem = switchPetMenuItem
-        let petResizeModeItem = NSMenuItem(title: "Resize Pet by Dragging", action: #selector(togglePetResizeMode), keyEquivalent: "")
-        menu.addItem(petResizeModeItem)
-        self.petResizeModeItem = petResizeModeItem
-        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettingsDialog), keyEquivalent: ","))
-        menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Open Pet Assets Folder", action: #selector(openPetFolder), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         menu.items
@@ -243,14 +220,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        pauseEventsItem?.title = eventPreferences.isPaused ? "Resume Events" : "Pause Events"
-        pauseEventsItem?.state = eventPreferences.isPaused ? .on : .off
-
-        let currentSource = eventRouter?.snapshot.currentSource
-        muteCurrentSourceItem?.title = currentSource.map { "Mute \($0)" } ?? "Mute Current Source"
-        muteCurrentSourceItem?.isEnabled = currentSource != nil
-        unmuteAllSourcesItem?.isEnabled = !eventPreferences.mutedSources.isEmpty
-        petResizeModeItem?.state = userInterfacePreferences.isPetResizeModeEnabled ? .on : .off
         rebuildFocusTimerMenu()
         rebuildSwitchPetMenu()
     }
@@ -267,6 +236,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openPetFolder() {
         NSWorkspace.shared.open(AppStorage.petsDirectory)
+    }
+
+    @objc private func showPetResizeControl() {
+        petWindow?.show()
+        petWindow?.showPetResizeControl()
     }
 
     @objc private func selectPet(_ sender: NSMenuItem) {
@@ -288,6 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    #if DEBUG
     @objc private func previewPetState(_ sender: NSMenuItem) {
         guard
             let rawValue = sender.representedObject as? String,
@@ -300,6 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         petBehaviorController?.previewState(state)
         AuditLogger.appendRuntime(status: "pet_preview_state", message: state.rawValue)
     }
+    #endif
 
     @objc private func showFocusTimerDialog() {
         let alert = NSAlert()
@@ -348,86 +324,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    @objc private func togglePauseEvents() {
-        eventPreferences.isPaused.toggle()
-        saveEventPreferences()
-    }
-
-    @objc private func togglePetResizeMode() {
-        userInterfacePreferences.isPetResizeModeEnabled.toggle()
-        applyAndSaveUserInterfacePreferences()
-    }
-
-    @objc private func showSettingsDialog() {
-        let preferences = userInterfacePreferences.clamped()
-        let alert = NSAlert()
-        alert.messageText = "Settings"
-        alert.informativeText = "Adjust desktop panel and pet size."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        let threadOpacitySlider = Self.slider(
-            value: preferences.threadPanelOpacity,
-            minValue: UserInterfacePreferences.minimumThreadPanelOpacity,
-            maxValue: UserInterfacePreferences.maximumThreadPanelOpacity
-        )
-        let petScaleSlider = Self.slider(
-            value: preferences.petScale,
-            minValue: UserInterfacePreferences.minimumPetScale,
-            maxValue: UserInterfacePreferences.maximumPetScale
-        )
-        let resizeModeButton = NSButton(checkboxWithTitle: "Resize pet by dragging", target: nil, action: nil)
-        resizeModeButton.state = preferences.isPetResizeModeEnabled ? .on : .off
-
-        alert.accessoryView = makeSettingsAccessoryView(
-            threadOpacitySlider: threadOpacitySlider,
-            petScaleSlider: petScaleSlider,
-            resizeModeButton: resizeModeButton
-        )
-
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            return
-        }
-
-        userInterfacePreferences = UserInterfacePreferences(
-            threadPanelOpacity: threadOpacitySlider.doubleValue,
-            petScale: petScaleSlider.doubleValue,
-            isPetResizeModeEnabled: resizeModeButton.state == .on
-        ).clamped()
-        applyAndSaveUserInterfacePreferences()
-    }
-
-    @objc private func openCurrentAction() {
-        _ = performCurrentAction()
-    }
-
-    @objc private func clearCurrentEvent() {
-        guard let currentSource = eventRouter?.snapshot.currentSource else {
-            _ = eventRouter?.clear()
-            return
-        }
-
-        eventRouter?.clearSource(currentSource)
-    }
-
-    @objc private func muteCurrentSource() {
-        guard let source = eventRouter?.snapshot.currentSource else {
-            return
-        }
-
-        var mutedSources = eventPreferences.mutedSourceSet
-        mutedSources.insert(source)
-        eventPreferences.mutedSources = mutedSources.sorted()
-        saveEventPreferences()
-        eventRouter?.clearSource(source)
-    }
-
-    @objc private func unmuteAllSources() {
-        eventPreferences.mutedSources = []
-        saveEventPreferences()
-    }
-
     @objc private func quit() {
         NSApp.terminate(nil)
     }
@@ -439,10 +335,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         guard !event.clearsRouter else {
             return eventRouter.accept(event)
-        }
-
-        if eventPreferences.isPaused || eventPreferences.mutedSourceSet.contains(event.source) {
-            return eventRouter.snapshot.currentState
         }
 
         petWindow?.show()
@@ -481,23 +373,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
-    private func saveEventPreferences() {
-        do {
-            try AppStorage.saveEventPreferences(eventPreferences)
-        } catch {
-            NSLog("GlobalPetAssistant failed to save event preferences: \(String(describing: error))")
-        }
-    }
-
-    private func updatePetScaleFromDrag(_ scale: Double) {
-        userInterfacePreferences.petScale = scale
-        applyAndSaveUserInterfacePreferences()
-    }
-
-    private func applyAndSaveUserInterfacePreferences() {
-        userInterfacePreferences = userInterfacePreferences.clamped()
-        petWindow?.applyUserInterfacePreferences(userInterfacePreferences)
-        petResizeModeItem?.state = userInterfacePreferences.isPetResizeModeEnabled ? .on : .off
+    private func updatePetScale(_ scale: Double) {
+        userInterfacePreferences = UserInterfacePreferences(petScale: scale).clamped()
         do {
             try AppStorage.saveUserInterfacePreferences(userInterfacePreferences)
         } catch {
@@ -565,44 +442,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func makePetContextMenu() -> NSMenu {
         let menu = NSMenu()
-        let snapshot = eventRouter?.snapshot
-
-        let openActionItem = NSMenuItem(title: "Open Action", action: #selector(openCurrentAction), keyEquivalent: "")
-        openActionItem.isEnabled = snapshot?.hasAction == true
-        menu.addItem(openActionItem)
-
-        let clearItem = NSMenuItem(title: "Clear Current Event", action: #selector(clearCurrentEvent), keyEquivalent: "")
-        clearItem.isEnabled = snapshot?.currentSource != nil
-        menu.addItem(clearItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let muteItem = NSMenuItem(title: "Mute Source", action: #selector(muteCurrentSource), keyEquivalent: "")
-        muteItem.isEnabled = snapshot?.currentSource != nil
-        menu.addItem(muteItem)
-
-        let unmuteItem = NSMenuItem(title: "Unmute All Sources", action: #selector(unmuteAllSources), keyEquivalent: "")
-        unmuteItem.isEnabled = !eventPreferences.mutedSources.isEmpty
-        menu.addItem(unmuteItem)
-
-        let pauseTitle = eventPreferences.isPaused ? "Resume Events" : "Pause Events"
-        let pauseItem = NSMenuItem(title: pauseTitle, action: #selector(togglePauseEvents), keyEquivalent: "")
-        pauseItem.state = eventPreferences.isPaused ? .on : .off
-        menu.addItem(pauseItem)
-
-        menu.addItem(NSMenuItem.separator())
         menu.addItem(makeFocusTimerMenuItem())
         let cancelTimerItem = NSMenuItem(title: "Cancel Timer", action: #selector(cancelFocusTimer), keyEquivalent: "")
         cancelTimerItem.isEnabled = focusTimerController?.snapshot != nil
         menu.addItem(cancelTimerItem)
         menu.addItem(NSMenuItem.separator())
+        #if DEBUG
         menu.addItem(makePreviewStateMenuItem())
+        menu.addItem(NSMenuItem.separator())
+        #endif
         menu.addItem(makeSwitchPetMenuItem())
-        let resizeModeItem = NSMenuItem(title: "Resize Pet by Dragging", action: #selector(togglePetResizeMode), keyEquivalent: "")
-        resizeModeItem.state = userInterfacePreferences.isPetResizeModeEnabled ? .on : .off
-        menu.addItem(resizeModeItem)
-        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettingsDialog), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Resize Pet", action: #selector(showPetResizeControl), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Open Pet Assets Folder", action: #selector(openPetFolder), keyEquivalent: ""))
 
         menu.items
             .filter { $0.action != nil }
@@ -610,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return menu
     }
 
+    #if DEBUG
     private func makePreviewStateMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Preview State", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
@@ -624,6 +476,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.submenu = submenu
         return item
     }
+    #endif
 
     private func makeSwitchPetMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Switch Pet", action: nil, keyEquivalent: "")
@@ -725,46 +578,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return field
     }
 
-    private static func slider(value: Double, minValue: Double, maxValue: Double) -> NSSlider {
-        let slider = NSSlider(value: value, minValue: minValue, maxValue: maxValue, target: nil, action: nil)
-        slider.widthAnchor.constraint(equalToConstant: 220).isActive = true
-        return slider
-    }
-
-    private func makeSettingsAccessoryView(
-        threadOpacitySlider: NSSlider,
-        petScaleSlider: NSSlider,
-        resizeModeButton: NSButton
-    ) -> NSView {
-        let opacityValue = NSTextField(labelWithString: "\(Int(threadOpacitySlider.doubleValue * 100))%")
-        let petScaleValue = NSTextField(labelWithString: "\(Int(petScaleSlider.doubleValue * 100))%")
-        opacityValue.alignment = .right
-        petScaleValue.alignment = .right
-        opacityValue.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        petScaleValue.widthAnchor.constraint(equalToConstant: 44).isActive = true
-
-        let opacityTarget = SliderValueUpdater(slider: threadOpacitySlider, label: opacityValue)
-        let petScaleTarget = SliderValueUpdater(slider: petScaleSlider, label: petScaleValue)
-        threadOpacitySlider.target = opacityTarget
-        threadOpacitySlider.action = #selector(SliderValueUpdater.updateLabel)
-        petScaleSlider.target = petScaleTarget
-        petScaleSlider.action = #selector(SliderValueUpdater.updateLabel)
-
-        let grid = NSGridView(views: [
-            [NSTextField(labelWithString: "Thread panel opacity"), threadOpacitySlider, opacityValue],
-            [NSTextField(labelWithString: "Pet size"), petScaleSlider, petScaleValue],
-            [NSView(), resizeModeButton, NSView()]
-        ])
-        grid.column(at: 0).xPlacement = .trailing
-        grid.column(at: 1).xPlacement = .fill
-        grid.column(at: 2).xPlacement = .trailing
-        grid.rowSpacing = 10
-        grid.columnSpacing = 10
-        grid.translatesAutoresizingMaskIntoConstraints = false
-        objc_setAssociatedObject(grid, &Self.sliderTargetsAssociationKey, [opacityTarget, petScaleTarget], .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        return grid
-    }
-
     private func makeFocusTimerAccessoryView(
         hoursField: NSTextField,
         minutesField: NSTextField,
@@ -799,24 +612,5 @@ private enum PetSwitchError: LocalizedError {
         case .petNotFound(let petID):
             "No compatible installed pet named '\(petID)' was found."
         }
-    }
-}
-
-@MainActor
-private final class SliderValueUpdater: NSObject {
-    private weak var slider: NSSlider?
-    private weak var label: NSTextField?
-
-    init(slider: NSSlider, label: NSTextField) {
-        self.slider = slider
-        self.label = label
-    }
-
-    @objc func updateLabel() {
-        guard let slider, let label else {
-            return
-        }
-
-        label.stringValue = "\(Int(slider.doubleValue * 100))%"
     }
 }
