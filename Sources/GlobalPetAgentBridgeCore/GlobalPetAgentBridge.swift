@@ -24,6 +24,7 @@ public enum GlobalPetAgentBridgeError: Error, Equatable, CustomStringConvertible
 public enum GlobalPetAgentBridge {
     public static let socketEnvironmentKey = "GLOBAL_PET_AGENT_SOCKET"
     public static let disableEnvironmentKey = "GLOBAL_PET_ASSISTANT_DISABLE_CODEX_HOOKS"
+    public static let disableAgentHooksEnvironmentKey = "GLOBAL_PET_ASSISTANT_DISABLE_AGENT_HOOKS"
     public static let defaultSocketPath = "\(NSHomeDirectory())/.global-pet-assistant/run/agent-hooks.sock"
     public static let auditLogPath = "\(NSHomeDirectory())/.global-pet-assistant/logs/agent-hooks.jsonl"
 
@@ -44,7 +45,9 @@ public enum GlobalPetAgentBridge {
         "CURSOR_IPC_HOOK_CLI",
         "CODEX_SESSION_ID",
         "CODEX_THREAD_ID",
-        "CODEX_CONVERSATION_ID"
+        "CODEX_CONVERSATION_ID",
+        "CLAUDE_SESSION_ID",
+        "CLAUDE_CONVERSATION_ID"
     ]
 
     public static func parseSource(arguments: [String]) throws -> String {
@@ -143,12 +146,11 @@ public enum GlobalPetAgentBridge {
         send: (Data, String) throws -> Void = sendEnvelope,
         appendAudit: (Data) -> Void = appendAuditLine
     ) -> Int32 {
-        if environment[disableEnvironmentKey] == "1" {
-            return 0
-        }
-
         do {
             let source = try parseSource(arguments: arguments)
+            if environment[disableAgentHooksEnvironmentKey] == "1" || (source == "codex" && environment[disableEnvironmentKey] == "1") {
+                return 0
+            }
             let line = try makeEnvelopeLine(
                 source: source,
                 arguments: arguments,
@@ -245,6 +247,8 @@ public enum GlobalPetAgentBridge {
         switch source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "codex":
             return "codex"
+        case "claude-code", "claude_code":
+            return "claude-code"
         default:
             throw GlobalPetAgentBridgeError.unsupportedSource(source)
         }

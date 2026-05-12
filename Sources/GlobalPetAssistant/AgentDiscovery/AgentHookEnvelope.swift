@@ -196,7 +196,9 @@ struct AgentHookEnvelope: Codable, Equatable, Sendable {
             "CURSOR_IPC_HOOK_CLI",
             "CODEX_SESSION_ID",
             "CODEX_THREAD_ID",
-            "CODEX_CONVERSATION_ID"
+            "CODEX_CONVERSATION_ID",
+            "CLAUDE_SESSION_ID",
+            "CLAUDE_CONVERSATION_ID"
         ]
         return keys.reduce(into: [:]) { result, key in
             if let value = environment[key], !value.isEmpty {

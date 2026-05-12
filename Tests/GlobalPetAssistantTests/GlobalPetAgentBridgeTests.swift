@@ -11,6 +11,12 @@ struct GlobalPetAgentBridgeTests {
     }
 
     @Test
+    func parsesClaudeCodeSource() throws {
+        #expect(try GlobalPetAgentBridge.parseSource(arguments: ["--source", "claude-code"]) == "claude-code")
+        #expect(try GlobalPetAgentBridge.parseSource(arguments: ["--source=claude_code"]) == "claude-code")
+    }
+
+    @Test
     func rejectsUnsupportedSource() {
         #expect(throws: GlobalPetAgentBridgeError.unsupportedSource("claude")) {
             try GlobalPetAgentBridge.parseSource(arguments: ["--source", "claude"])
@@ -74,6 +80,42 @@ struct GlobalPetAgentBridgeTests {
 
         #expect(exitCode == 0)
         #expect(didSend == false)
+    }
+
+    @Test
+    func agentDisableEnvironmentSwitchExitsSuccessfullyWithoutSending() {
+        var didSend = false
+        let exitCode = GlobalPetAgentBridge.run(
+            arguments: ["--source", "claude-code"],
+            stdinData: Data(#"{"hook_event_name":"SessionStart"}"#.utf8),
+            environment: [GlobalPetAgentBridge.disableAgentHooksEnvironmentKey: "1"],
+            currentDirectory: "/tmp/project",
+            parentProcessID: nil,
+            tty: nil,
+            send: { _, _ in didSend = true },
+            appendAudit: { _ in }
+        )
+
+        #expect(exitCode == 0)
+        #expect(didSend == false)
+    }
+
+    @Test
+    func codexDisableEnvironmentSwitchDoesNotDisableClaudeCode() {
+        var didSend = false
+        let exitCode = GlobalPetAgentBridge.run(
+            arguments: ["--source", "claude-code"],
+            stdinData: Data(#"{"hook_event_name":"SessionStart"}"#.utf8),
+            environment: [GlobalPetAgentBridge.disableEnvironmentKey: "1"],
+            currentDirectory: "/tmp/project",
+            parentProcessID: nil,
+            tty: nil,
+            send: { _, _ in didSend = true },
+            appendAudit: { _ in }
+        )
+
+        #expect(exitCode == 0)
+        #expect(didSend == true)
     }
 
     @Test

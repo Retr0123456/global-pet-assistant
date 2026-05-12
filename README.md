@@ -178,7 +178,22 @@ Source-level rate limits are in memory and reset when the app restarts:
 
 Action allowlisting and pet import source directories are loaded from `~/.global-pet-assistant/config.json`. The app writes a default config on first launch. If that file becomes invalid JSON or no longer matches the schema, the app backs it up as `config.invalid-<timestamp>.json` and regenerates defaults. Unknown sources can still update pet state, but events with actions are rejected with HTTP `403` and JSON error `action_not_allowed`.
 
-Hook examples live under `examples/hooks/`:
+Agent hook integrations live under dedicated plugin directories:
+
+| Integration | Install guide | Source install command | Release install command |
+| --- | --- | --- | --- |
+| Codex | [Codex Hooks](plugins/codex/README.md) | `plugins/codex/install.sh` | `/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/codex/install.sh` |
+| Claude Code | [Claude Code Hooks](plugins/claude-code/README.md) | `plugins/claude-code/install.sh` | `/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/claude-code/install.sh` |
+
+Compatibility wrappers remain under `Tools/`:
+
+```bash
+Tools/install-codex-hooks.sh
+Tools/install-claude-code-hooks.sh
+```
+
+Manual task examples still live under `examples/hooks/` for local scripts and
+custom pipelines:
 
 ```bash
 examples/hooks/codex-task.sh running
@@ -187,7 +202,8 @@ examples/hooks/claude-task.sh running
 examples/hooks/local-build.sh swift build
 ```
 
-Each example is a thin wrapper around `petctl`. Copy the relevant script into the hook directory used by Codex CLI, Claude Code, or a local build pipeline, or call it in place from this checkout. Common environment variables:
+Each manual example is a thin wrapper around `petctl`. Common environment
+variables:
 
 | Variable | Meaning |
 | --- | --- |
@@ -200,45 +216,35 @@ Each example is a thin wrapper around `petctl`. Copy the relevant script into th
 | `PET_ACTION_FOLDER` | Folder opened when an actionable failure/success notification is clicked. |
 | `PET_LOG_PATH` | Latest local build log path; defaults to `~/.global-pet-assistant/logs/local-build-latest.log`. |
 
-Codex lifecycle hooks are available as opt-in examples under `examples/codex-hooks/`.
-They are not enabled by default in the public checkout.
-
-To enable them for every Codex session on this machine:
+To enable Codex hooks for every Codex session on this machine:
 
 ```bash
-Tools/install-codex-hooks.sh
+plugins/codex/install.sh
 ```
 
 If you installed from a release app instead of a source checkout:
 
 ```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/codex/install.sh
 ```
 
 This installs a user-level hook under `~/.codex/`, so sessions launched from
 different directories can all notify the same pet app.
 
-To enable them for this repository only:
+To enable Claude Code hooks on this machine:
 
 ```bash
-mkdir -p .codex
-cp examples/codex-hooks/config.toml .codex/config.toml
-cp examples/codex-hooks/hooks.json .codex/hooks.json
+plugins/claude-code/install.sh
 ```
 
-The example config enables:
+If you installed from a release app:
 
-```toml
-[features]
-codex_hooks = true
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/claude-code/install.sh
 ```
 
-After restarting Codex, trust this repository's `.codex/` config layer if
-prompted. The example hook forwards `SessionStart`, `UserPromptSubmit`,
-`PermissionRequest`, and `Stop` to this app's event API. Use
-`Tools/codex-pet-events.sh disable` to globally stop Codex-side event pushes to
-the pet app, and `Tools/codex-pet-events.sh enable` to turn them back on. See
-[Codex Hook Integration](docs/codex-hook-integration.md).
+See [Codex Hook Integration](docs/codex-hook-integration.md) and
+[Claude Code Hook Integration](docs/claude-code-hook-integration.md).
 
 Local webhook bridge:
 
@@ -441,6 +447,9 @@ The bundled default pet is an original generated Codex-compatible package under
 - [Notification And Focus Architecture Reduction Plan](docs/notification-focus-architecture-reduction-plan.md)
 - [Assets And Licensing](docs/assets-and-licensing.md)
 - [Codex Hook Integration](docs/codex-hook-integration.md)
+- [Claude Code Hook Integration](docs/claude-code-hook-integration.md)
+- [Codex Hook Install Guide](plugins/codex/README.md)
+- [Claude Code Hook Install Guide](plugins/claude-code/README.md)
 - [Kitty Plugin Install Guide](plugins/kitty/README.md)
 - [Desktop Pet Experience Plan](docs/desktop-experience-plan.md)
 - [Daily-driver MVP Task List](docs/daily-driver-mvp.md)

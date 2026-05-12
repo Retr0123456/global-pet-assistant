@@ -1,0 +1,78 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source codex",
+            "timeout": 5,
+            "statusMessage": "Updating pet Codex session state"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source codex",
+            "timeout": 5,
+            "statusMessage": "Updating pet Codex running state"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source codex",
+            "timeout": 5,
+            "statusMessage": "Updating pet Codex tool state"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source codex",
+            "timeout": 5,
+            "statusMessage": "Updating pet Codex tool result"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source codex",
+            "timeout": 5,
+            "statusMessage": "Updating pet Codex approval state"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source codex",
+            "timeout": 5,
+            "statusMessage": "Updating pet Codex completion state"
+          }
+        ]
+      }
+    ]
+  }
+}

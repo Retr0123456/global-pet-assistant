@@ -101,7 +101,7 @@ false
 Codex lifecycle hooks are optional and require one extra manual command:
 
 ```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/codex/install.sh
 ```
 
 ## Installer Options
@@ -159,9 +159,9 @@ For richer Codex lifecycle events such as tool use and approval-needed state,
 also install the Codex hooks.
 
 ```bash
-Tools/install-codex-hooks.sh
+plugins/codex/install.sh
 # or, from an installed release app:
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/codex/install.sh
 ```
 
 ## Installed Files

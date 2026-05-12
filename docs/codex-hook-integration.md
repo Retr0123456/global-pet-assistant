@@ -1,6 +1,8 @@
 # Codex Hook Integration
 
-This repository includes opt-in Codex hook support that forwards Codex lifecycle events to the local pet through the agent hook bridge and Unix socket.
+This repository includes opt-in Codex hook support that forwards Codex lifecycle
+events to the local pet through the agent hook bridge and Unix socket. The
+supported installer and templates live under `plugins/codex/`.
 
 ## Official Codex Surface
 
@@ -13,7 +15,9 @@ codex_hooks = true
 
 Codex loads hooks from `hooks.json` or inline `[hooks]` tables next to active config layers. The useful locations include `~/.codex/hooks.json`, `~/.codex/config.toml`, `<repo>/.codex/hooks.json`, and `<repo>/.codex/config.toml`.
 
-The public checkout keeps hook templates under `examples/codex-hooks/` instead of shipping an active `.codex/` layer. Codex only loads project-local hooks after you copy the examples into `.codex/` and trust that config layer.
+The public checkout keeps hook templates under `plugins/codex/templates/`
+instead of shipping an active `.codex/` layer. Codex only loads project-local
+hooks after you copy templates into `.codex/` and trust that config layer.
 
 ## Event Flow
 
@@ -42,7 +46,9 @@ The app receives envelopes through `AgentHookSocketServer`, sends Codex envelope
 | `PermissionRequest` | `waiting` | Codex is waiting for approval of a command or permission request. |
 | `Stop` | `completed` | Codex finished the turn and the result is ready for review. |
 
-The legacy Python hook remains in `examples/codex-hooks/hooks/codex-pet-event.py` for compatibility during migration, but it is no longer the managed installer path.
+The legacy Python hook remains in `examples/codex-hooks/hooks/codex-pet-event.py`
+for compatibility during migration, but it is no longer the managed installer
+path.
 
 ## Enable The Hooks
 
@@ -50,17 +56,24 @@ For daily use across multiple working directories, install the hook at the
 Codex user level:
 
 ```bash
-Tools/install-codex-hooks.sh
+plugins/codex/install.sh
 ```
 
 If you installed from the release app:
 
 ```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/codex/install.sh
 ```
 
-This writes `~/.codex/hooks.json` with an absolute bridge path, preserves
-unrelated hook entries, updates this project's managed entries idempotently, and ensures
+Compatibility wrapper:
+
+```bash
+Tools/install-codex-hooks.sh
+```
+
+The installer writes `~/.codex/hooks.json` with an absolute bridge path,
+preserves unrelated hook entries, updates this project's managed entries
+idempotently, and ensures
 `~/.codex/config.toml` contains:
 
 ```toml
@@ -71,13 +84,13 @@ codex_hooks = true
 Restart Codex sessions after installing. User-level hooks are the recommended
 setup when you launch Codex from multiple working directories.
 
-For repo-local testing only, copy the opt-in examples into a local `.codex/`
+For repo-local testing only, copy the opt-in templates into a local `.codex/`
 directory:
 
 ```bash
 mkdir -p .codex
-cp examples/codex-hooks/config.toml .codex/config.toml
-cp examples/codex-hooks/hooks.json .codex/hooks.json
+cp plugins/codex/templates/config.toml .codex/config.toml
+cp plugins/codex/templates/hooks.json .codex/hooks.json
 ```
 
 The example `config.toml` enables:
@@ -95,8 +108,11 @@ Repo-local hooks only apply when Codex loads that repo's `.codex/` config layer.
 Temporarily disable the managed bridge without editing hooks:
 
 ```bash
-export GLOBAL_PET_ASSISTANT_DISABLE_CODEX_HOOKS=1
+export GLOBAL_PET_ASSISTANT_DISABLE_AGENT_HOOKS=1
 ```
+
+The old Codex-specific switch `GLOBAL_PET_ASSISTANT_DISABLE_CODEX_HOOKS=1`
+still works for compatibility.
 
 Remove managed entries from `~/.codex/hooks.json` by deleting hook commands that contain:
 
@@ -113,6 +129,7 @@ Build and install the bridge-backed hooks:
 ```bash
 swift build --product global-pet-agent-bridge
 Tools/install-codex-hooks.sh
+Tools/verify-agent-hook-installers.sh
 ```
 
 Manually test the app-facing event path:

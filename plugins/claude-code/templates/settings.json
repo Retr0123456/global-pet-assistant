@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code session state"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code running state"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code tool state"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code approval state"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code denied-permission state"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code tool result"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code tool failure"
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code tool batch state"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code notification state"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code subagent state"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code subagent completion"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code completion state"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code failure state"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "global-pet-agent-bridge --source claude-code",
+            "timeout": 5,
+            "statusMessage": "Updating pet Claude Code session end state"
+          }
+        ]
+      }
+    ]
+  }
+}
