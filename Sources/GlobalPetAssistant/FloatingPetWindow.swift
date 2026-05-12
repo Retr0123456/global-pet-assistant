@@ -85,6 +85,15 @@ final class FloatingPetWindow: NSPanel {
         }
     }
 
+    var onPetScaleChanged: ((Double) -> Void)? {
+        get {
+            petContentView.onPetScaleChanged
+        }
+        set {
+            petContentView.onPetScaleChanged = newValue
+        }
+    }
+
     init(contentView petView: PetSpriteView, savedOrigin: StoredWindowOrigin?) {
         let size = petView.intrinsicContentSize
         let frame = FloatingPetWindow.initialFrame(size: size, savedOrigin: savedOrigin)
@@ -134,6 +143,10 @@ final class FloatingPetWindow: NSPanel {
 
     func updateFocusTimerSnapshot(_ snapshot: FocusTimerSnapshot?) {
         petContentView.updateFocusTimerSnapshot(snapshot)
+    }
+
+    func applyUserInterfacePreferences(_ preferences: UserInterfacePreferences) {
+        petContentView.applyUserInterfacePreferences(preferences)
     }
 
     private func fitToContentPreservingTopRight() {
@@ -243,12 +256,12 @@ final class PetWindowContentView: NSView {
         case belowPet
     }
 
-    private static let threadPanelMaxWidth: CGFloat = 300
-    private static let threadPanelMinHeight: CGFloat = 78
-    private static let threadRowHeight: CGFloat = 78
+    private static let threadPanelMaxWidth: CGFloat = 320
+    private static let threadPanelMinHeight: CGFloat = 58
+    private static let threadRowHeight: CGFloat = 58
     private static let threadPanelVerticalInset: CGFloat = 0
-    private static let threadStackSpacing: CGFloat = 8
-    private static let threadPanelGap: CGFloat = 8
+    private static let threadStackSpacing: CGFloat = 5
+    private static let threadPanelGap: CGFloat = 6
     private static let badgeSize: CGFloat = 30
     private static let flashStackWidth: CGFloat = 220
     private static let flashRowHeight: CGFloat = 34
@@ -264,6 +277,7 @@ final class PetWindowContentView: NSView {
     var onAgentMessageSubmit: ((ThreadDisplayRow, String) -> Void)?
     var onFocusTimerCancel: (() -> Void)?
     var onMoveEnded: ((NSPoint) -> Void)?
+    var onPetScaleChanged: ((Double) -> Void)?
     var contextMenuProvider: (() -> NSMenu?)?
     var onDesiredSizeChanged: (() -> Void)?
     var preservesRightEdgeOnResize: Bool {
@@ -304,11 +318,15 @@ final class PetWindowContentView: NSView {
     private var threadPanelBelowPetConstraint: NSLayoutConstraint?
     private var threadPanelLeadingConstraint: NSLayoutConstraint?
     private var threadPanelTrailingConstraint: NSLayoutConstraint?
+    private var petWidthConstraint: NSLayoutConstraint?
+    private var petHeightConstraint: NSLayoutConstraint?
+    private var threadPanelWidthConstraint: NSLayoutConstraint?
     private var flashLeadingConstraint: NSLayoutConstraint?
     private var flashTrailingConstraint: NSLayoutConstraint?
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
     private var mouseDownPetScreenOrigin: NSPoint?
+    private var mouseDownPetSize: NSSize?
     private var didMouseDownOnPet = false
     private var didDrag = false
     private let clickMovementThreshold: CGFloat = 5
@@ -317,6 +335,7 @@ final class PetWindowContentView: NSView {
     private var threadSnapshot: ThreadPanelSnapshot?
     private var focusTimerSnapshot: FocusTimerSnapshot?
     private var isThreadPanelExpanded = false
+    private var userInterfacePreferences = UserInterfacePreferences()
     private var horizontalPlacement: HorizontalPlacement = .trailing
     private var threadPanelVerticalPlacement: ThreadPanelVerticalPlacement = .belowPet
     private var hasFlashMessages: Bool {
@@ -374,16 +393,23 @@ final class PetWindowContentView: NSView {
         self.flashLeadingConstraint = flashLeadingConstraint
         self.flashTrailingConstraint = flashTrailingConstraint
 
+        let petWidthConstraint = petView.widthAnchor.constraint(equalToConstant: petView.intrinsicContentSize.width)
+        let petHeightConstraint = petView.heightAnchor.constraint(equalToConstant: petView.intrinsicContentSize.height)
+        let threadPanelWidthConstraint = threadPanelView.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth)
+        self.petWidthConstraint = petWidthConstraint
+        self.petHeightConstraint = petHeightConstraint
+        self.threadPanelWidthConstraint = threadPanelWidthConstraint
+
         NSLayoutConstraint.activate([
-            petView.widthAnchor.constraint(equalToConstant: petView.intrinsicContentSize.width),
-            petView.heightAnchor.constraint(equalToConstant: petView.intrinsicContentSize.height),
+            petWidthConstraint,
+            petHeightConstraint,
 
             threadBadgeButton.topAnchor.constraint(equalTo: petView.topAnchor),
             threadBadgeButton.trailingAnchor.constraint(equalTo: petView.trailingAnchor),
             threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.badgeSize),
             threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.badgeSize),
 
-            threadPanelView.widthAnchor.constraint(equalToConstant: Self.threadPanelMaxWidth),
+            threadPanelWidthConstraint,
             panelHeightConstraint,
 
             flashStackView.topAnchor.constraint(equalTo: petView.topAnchor, constant: Self.flashTopOffset),
@@ -433,6 +459,7 @@ final class PetWindowContentView: NSView {
         mouseDownScreenPoint = window?.convertPoint(toScreen: event.locationInWindow)
         mouseDownWindowOrigin = window?.frame.origin
         mouseDownPetScreenOrigin = petScreenFrame()?.origin
+        mouseDownPetSize = petView.intrinsicContentSize
         didDrag = false
     }
 
@@ -454,6 +481,14 @@ final class PetWindowContentView: NSView {
             x: currentScreenPoint.x - mouseDownScreenPoint.x,
             y: currentScreenPoint.y - mouseDownScreenPoint.y
         )
+        if userInterfacePreferences.isPetResizeModeEnabled,
+           let mouseDownPetSize,
+           let mouseDownPetScreenOrigin {
+            resizePet(from: mouseDownPetSize, anchoredAt: mouseDownPetScreenOrigin, delta: delta)
+            didDrag = true
+            return
+        }
+
         if let mouseDownPetScreenOrigin {
             let desiredPetOrigin = NSPoint(
                 x: mouseDownPetScreenOrigin.x + delta.x,
@@ -494,6 +529,8 @@ final class PetWindowContentView: NSView {
         let movedDistance = mouseDownScreenPoint?.distance(to: mouseUpScreenPoint) ?? 0
         if didMouseDownOnPet && !didDrag && movedDistance <= clickMovementThreshold {
             onClick?()
+        } else if didMouseDownOnPet, userInterfacePreferences.isPetResizeModeEnabled {
+            onDragChanged?(nil)
         } else if didMouseDownOnPet {
             let settledFrame = FloatingPetWindow.settledFrame(window.frame)
             window.setFrame(settledFrame, display: true)
@@ -523,8 +560,57 @@ final class PetWindowContentView: NSView {
         mouseDownScreenPoint = nil
         mouseDownWindowOrigin = nil
         mouseDownPetScreenOrigin = nil
+        mouseDownPetSize = nil
         didMouseDownOnPet = false
         didDrag = false
+    }
+
+    private func resizePet(from startSize: NSSize, anchoredAt screenOrigin: NSPoint, delta: NSPoint) {
+        let dominantDelta = max(delta.x, -delta.y)
+        let requestedWidth = startSize.width + dominantDelta
+        let requestedScale = requestedWidth / PetSpriteView.baseDisplaySize.width
+        let nextScale = min(
+            CGFloat(UserInterfacePreferences.maximumPetScale),
+            max(CGFloat(UserInterfacePreferences.minimumPetScale), requestedScale)
+        )
+
+        guard abs(CGFloat(userInterfacePreferences.petScale) - nextScale) > 0.001 else {
+            return
+        }
+
+        var nextPreferences = userInterfacePreferences
+        nextPreferences.petScale = Double(nextScale)
+        applyUserInterfacePreferences(nextPreferences)
+        placePet(at: screenOrigin, display: true)
+        onPetScaleChanged?(Double(nextScale))
+    }
+
+    private func updatePetSizeConstraints() {
+        let size = petView.intrinsicContentSize
+        petWidthConstraint?.constant = size.width
+        petHeightConstraint?.constant = size.height
+    }
+
+    func applyUserInterfacePreferences(_ preferences: UserInterfacePreferences) {
+        let preferences = preferences.clamped()
+        let previousPetOrigin = petScreenFrame()?.origin
+        let previousSize = desiredContentSize
+        userInterfacePreferences = preferences
+        threadPanelView.alphaValue = CGFloat(preferences.threadPanelOpacity)
+        petView.setDisplayScaleMultiplier(CGFloat(preferences.petScale))
+        updatePetSizeConstraints()
+        updateThreadPanelHeight()
+        applyFloatingSurfacePlacement(preservingPetPosition: true)
+
+        if let previousPetOrigin {
+            placePet(at: previousPetOrigin, display: false)
+        }
+
+        let nextSize = desiredContentSize
+        if previousSize != nextSize {
+            frame.size = nextSize
+            onDesiredSizeChanged?()
+        }
     }
 
     func updateThreadSnapshot(_ snapshot: EventRouterSnapshot?) {
@@ -1214,15 +1300,15 @@ private final class ThreadBadgeEffectButton: NSView {
 }
 
 private final class ThreadMessageRowView: NSView {
-    private static let cornerRadius: CGFloat = 16
-    private static let statusBadgeSize: CGFloat = 30
+    private static let cornerRadius: CGFloat = 12
+    private static let statusBadgeSize: CGFloat = 24
     private static let closeButtonSize: CGFloat = 18
-    private static let actionReserveWidth: CGFloat = 28
-    private static let fixedHeight: CGFloat = 78
-    private static let replyControlRadius: CGFloat = 12
-    private static let replyControlHeight: CGFloat = 34
-    private static let replyButtonWidth: CGFloat = 76
-    private static let replyInputWidth: CGFloat = 218
+    private static let actionReserveWidth: CGFloat = 24
+    private static let fixedHeight: CGFloat = 58
+    private static let replyControlRadius: CGFloat = 10
+    private static let replyControlHeight: CGFloat = 28
+    private static let replyButtonWidth: CGFloat = 66
+    private static let replyInputWidth: CGFloat = 230
     private static let replyRestingFillAlpha: CGFloat = 0.07
     private static let replyActiveFillAlpha: CGFloat = 0.13
     private static let replyRestingBorderAlpha: CGFloat = 0.18
@@ -1401,17 +1487,17 @@ private final class ThreadMessageRowView: NSView {
             contentView.topAnchor.constraint(equalTo: effectView.topAnchor),
             contentView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
 
-            closeButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
-            closeButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            closeButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -7),
+            closeButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 7),
             closeButton.widthAnchor.constraint(equalToConstant: Self.closeButtonSize),
             closeButton.heightAnchor.constraint(equalToConstant: Self.closeButtonSize),
 
-            statusBadgeView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            statusBadgeView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
             statusBadgeView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             statusBadgeView.widthAnchor.constraint(equalToConstant: Self.statusBadgeSize),
             statusBadgeView.heightAnchor.constraint(equalToConstant: Self.statusBadgeSize),
 
-            textView.leadingAnchor.constraint(equalTo: statusBadgeView.trailingAnchor, constant: 12),
+            textView.leadingAnchor.constraint(equalTo: statusBadgeView.trailingAnchor, constant: 10),
             textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Self.actionReserveWidth),
             textView.topAnchor.constraint(equalTo: contentView.topAnchor),
             textView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
@@ -1422,7 +1508,7 @@ private final class ThreadMessageRowView: NSView {
             replyControlWidthConstraint = widthConstraint
             NSLayoutConstraint.activate([
                 replyControlEffectView.trailingAnchor.constraint(equalTo: textView.trailingAnchor),
-                replyControlEffectView.bottomAnchor.constraint(equalTo: textView.bottomAnchor, constant: -8),
+                replyControlEffectView.bottomAnchor.constraint(equalTo: textView.bottomAnchor, constant: -6),
                 widthConstraint,
                 replyControlEffectView.heightAnchor.constraint(equalToConstant: Self.replyControlHeight),
 
@@ -1661,7 +1747,7 @@ private extension NSView {
 }
 
 private final class ThreadStatusBadgeView: NSView {
-    private static let iconSize: CGFloat = 17
+    private static let iconSize: CGFloat = 14
 
     private let status: PetThreadStatus
     private let iconView = NSImageView()
@@ -1686,7 +1772,7 @@ private final class ThreadStatusBadgeView: NSView {
         layer?.backgroundColor = accentColor.withAlphaComponent(0.18).cgColor
         layer?.borderWidth = 1
         layer?.borderColor = accentColor.withAlphaComponent(0.46).cgColor
-        layer?.cornerRadius = 15
+        layer?.cornerRadius = 12
         layer?.masksToBounds = true
         toolTip = status.indicator.accessibilityDescription
 
@@ -1753,18 +1839,18 @@ private final class ThreadMessageTextView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let textRect = bounds.insetBy(dx: 0, dy: 12)
+        let textRect = bounds.insetBy(dx: 0, dy: 8)
         let titleRect = NSRect(
             x: textRect.minX,
             y: textRect.minY,
             width: textRect.width,
-            height: 20
+            height: 17
         )
         let messageRect = NSRect(
             x: textRect.minX,
-            y: titleRect.maxY + 4,
+            y: titleRect.maxY + 2,
             width: textRect.width,
-            height: 34
+            height: 26
         )
 
         directoryName.draw(
@@ -1783,7 +1869,7 @@ private final class ThreadMessageTextView: NSView {
         paragraphStyle.alignment = .right
         paragraphStyle.lineBreakMode = .byTruncatingTail
         return [
-            .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+            .font: NSFont.systemFont(ofSize: 12.5, weight: .semibold),
             .foregroundColor: NSColor.labelColor,
             .paragraphStyle: paragraphStyle
         ]
@@ -1794,7 +1880,7 @@ private final class ThreadMessageTextView: NSView {
         paragraphStyle.alignment = .right
         paragraphStyle.lineBreakMode = .byWordWrapping
         return [
-            .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+            .font: NSFont.systemFont(ofSize: 11.5, weight: .regular),
             .foregroundColor: NSColor.secondaryLabelColor,
             .paragraphStyle: paragraphStyle
         ]

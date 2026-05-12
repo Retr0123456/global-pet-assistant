@@ -1,12 +1,12 @@
 import AppKit
 
 final class PetSpriteView: NSView {
-    static let displayScale: CGFloat = 0.5
+    static let baseDisplayScale: CGFloat = 0.5
     private static let framesPerSecond: TimeInterval = 6.0
     private static let reducedMotionFrameHoldDuration: TimeInterval = 0.2
-    static let displaySize = NSSize(
-        width: CGFloat(PetAtlas.cellWidth) * displayScale,
-        height: CGFloat(PetAtlas.cellHeight) * displayScale
+    static let baseDisplaySize = NSSize(
+        width: CGFloat(PetAtlas.cellWidth) * baseDisplayScale,
+        height: CGFloat(PetAtlas.cellHeight) * baseDisplayScale
     )
 
     private var atlas: PetAtlas
@@ -15,14 +15,15 @@ final class PetSpriteView: NSView {
     private var currentFrames: [PetAtlasFrame] = []
     private var frameIndex = 0
     private var playbackGeneration = 0
+    private var displayScaleMultiplier: CGFloat = 1.0
 
     init(atlas: PetAtlas) {
         self.atlas = atlas
         super.init(frame: NSRect(
             x: 0,
             y: 0,
-            width: Self.displaySize.width,
-            height: Self.displaySize.height
+            width: Self.baseDisplaySize.width,
+            height: Self.baseDisplaySize.height
         ))
 
         wantsLayer = true
@@ -34,7 +35,29 @@ final class PetSpriteView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        Self.displaySize
+        displaySize
+    }
+
+    var displaySize: NSSize {
+        NSSize(
+            width: Self.baseDisplaySize.width * displayScaleMultiplier,
+            height: Self.baseDisplaySize.height * displayScaleMultiplier
+        )
+    }
+
+    func setDisplayScaleMultiplier(_ scale: CGFloat) {
+        let clampedScale = min(
+            CGFloat(UserInterfacePreferences.maximumPetScale),
+            max(CGFloat(UserInterfacePreferences.minimumPetScale), scale)
+        )
+        guard abs(displayScaleMultiplier - clampedScale) > 0.001 else {
+            return
+        }
+
+        displayScaleMultiplier = clampedScale
+        setFrameSize(displaySize)
+        invalidateIntrinsicContentSize()
+        needsLayout = true
     }
 
     override func viewDidMoveToWindow() {

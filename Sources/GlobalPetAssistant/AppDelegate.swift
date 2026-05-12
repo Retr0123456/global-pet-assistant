@@ -2,6 +2,8 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private static var sliderTargetsAssociationKey: UInt8 = 0
+
     private var petWindow: FloatingPetWindow?
     private var spriteView: PetSpriteView?
     private var petBehaviorController: PetBehaviorController?
@@ -11,12 +13,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var unmuteAllSourcesItem: NSMenuItem?
     private var focusTimerMenuItem: NSMenuItem?
     private var switchPetMenuItem: NSMenuItem?
+    private var petResizeModeItem: NSMenuItem?
     private var eventRouter: EventRouter?
     private var focusTimerController: FocusTimerController?
     private var eventServer: LocalEventServer?
     private var agentDiscoveryService: AgentDiscoveryService?
     private let actionHandler = ActionHandler()
     private var eventPreferences = EventPreferences()
+    private var userInterfacePreferences = UserInterfacePreferences()
     private var appConfiguration = AppConfiguration.defaultConfiguration
     private var authorizationToken = ""
     private var currentPetPackage: PetPackage?
@@ -30,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             appConfiguration = AppStorage.loadConfiguration()
             authorizationToken = try AppStorage.loadOrCreateToken()
             eventPreferences = AppStorage.loadEventPreferences()
+            userInterfacePreferences = AppStorage.loadUserInterfacePreferences()
             let (package, atlas) = try loadDisplayPet()
             NSLog("GlobalPetAssistant loaded pet '\(package.id)' from \(package.directoryURL.path)")
             AuditLogger.appendRuntime(status: "pet_loaded", message: "\(package.id) \(package.directoryURL.path)")
@@ -69,6 +74,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     y: origin.y
                 ))
             }
+            window.onPetScaleChanged = { [weak self] scale in
+                self?.updatePetScaleFromDrag(scale)
+            }
+            window.applyUserInterfacePreferences(userInterfacePreferences)
 
             self.petWindow = window
             self.spriteView = spriteView
@@ -143,6 +152,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let switchPetMenuItem = makeSwitchPetMenuItem()
         menu.addItem(switchPetMenuItem)
         self.switchPetMenuItem = switchPetMenuItem
+        let petResizeModeItem = NSMenuItem(title: "Resize Pet by Dragging", action: #selector(togglePetResizeMode), keyEquivalent: "")
+        menu.addItem(petResizeModeItem)
+        self.petResizeModeItem = petResizeModeItem
+        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettingsDialog), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
@@ -237,6 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         muteCurrentSourceItem?.title = currentSource.map { "Mute \($0)" } ?? "Mute Current Source"
         muteCurrentSourceItem?.isEnabled = currentSource != nil
         unmuteAllSourcesItem?.isEnabled = !eventPreferences.mutedSources.isEmpty
+        petResizeModeItem?.state = userInterfacePreferences.isPetResizeModeEnabled ? .on : .off
         rebuildFocusTimerMenu()
         rebuildSwitchPetMenu()
     }
@@ -339,6 +353,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         saveEventPreferences()
     }
 
+    @objc private func togglePetResizeMode() {
+        userInterfacePreferences.isPetResizeModeEnabled.toggle()
+        applyAndSaveUserInterfacePreferences()
+    }
+
+    @objc private func showSettingsDialog() {
+        let preferences = userInterfacePreferences.clamped()
+        let alert = NSAlert()
+        alert.messageText = "Settings"
+        alert.informativeText = "Adjust desktop panel and pet size."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let threadOpacitySlider = Self.slider(
+            value: preferences.threadPanelOpacity,
+            minValue: UserInterfacePreferences.minimumThreadPanelOpacity,
+            maxValue: UserInterfacePreferences.maximumThreadPanelOpacity
+        )
+        let petScaleSlider = Self.slider(
+            value: preferences.petScale,
+            minValue: UserInterfacePreferences.minimumPetScale,
+            maxValue: UserInterfacePreferences.maximumPetScale
+        )
+        let resizeModeButton = NSButton(checkboxWithTitle: "Resize pet by dragging", target: nil, action: nil)
+        resizeModeButton.state = preferences.isPetResizeModeEnabled ? .on : .off
+
+        alert.accessoryView = makeSettingsAccessoryView(
+            threadOpacitySlider: threadOpacitySlider,
+            petScaleSlider: petScaleSlider,
+            resizeModeButton: resizeModeButton
+        )
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return
+        }
+
+        userInterfacePreferences = UserInterfacePreferences(
+            threadPanelOpacity: threadOpacitySlider.doubleValue,
+            petScale: petScaleSlider.doubleValue,
+            isPetResizeModeEnabled: resizeModeButton.state == .on
+        ).clamped()
+        applyAndSaveUserInterfacePreferences()
+    }
+
     @objc private func openCurrentAction() {
         _ = performCurrentAction()
     }
@@ -427,6 +486,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try AppStorage.saveEventPreferences(eventPreferences)
         } catch {
             NSLog("GlobalPetAssistant failed to save event preferences: \(String(describing: error))")
+        }
+    }
+
+    private func updatePetScaleFromDrag(_ scale: Double) {
+        userInterfacePreferences.petScale = scale
+        applyAndSaveUserInterfacePreferences()
+    }
+
+    private func applyAndSaveUserInterfacePreferences() {
+        userInterfacePreferences = userInterfacePreferences.clamped()
+        petWindow?.applyUserInterfacePreferences(userInterfacePreferences)
+        petResizeModeItem?.state = userInterfacePreferences.isPetResizeModeEnabled ? .on : .off
+        do {
+            try AppStorage.saveUserInterfacePreferences(userInterfacePreferences)
+        } catch {
+            NSLog("GlobalPetAssistant failed to save UI preferences: \(String(describing: error))")
         }
     }
 
@@ -523,6 +598,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makePreviewStateMenuItem())
         menu.addItem(makeSwitchPetMenuItem())
+        let resizeModeItem = NSMenuItem(title: "Resize Pet by Dragging", action: #selector(togglePetResizeMode), keyEquivalent: "")
+        resizeModeItem.state = userInterfacePreferences.isPetResizeModeEnabled ? .on : .off
+        menu.addItem(resizeModeItem)
+        menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettingsDialog), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Open Pet Folder", action: #selector(openPetFolder), keyEquivalent: ""))
 
         menu.items
@@ -646,6 +725,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return field
     }
 
+    private static func slider(value: Double, minValue: Double, maxValue: Double) -> NSSlider {
+        let slider = NSSlider(value: value, minValue: minValue, maxValue: maxValue, target: nil, action: nil)
+        slider.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        return slider
+    }
+
+    private func makeSettingsAccessoryView(
+        threadOpacitySlider: NSSlider,
+        petScaleSlider: NSSlider,
+        resizeModeButton: NSButton
+    ) -> NSView {
+        let opacityValue = NSTextField(labelWithString: "\(Int(threadOpacitySlider.doubleValue * 100))%")
+        let petScaleValue = NSTextField(labelWithString: "\(Int(petScaleSlider.doubleValue * 100))%")
+        opacityValue.alignment = .right
+        petScaleValue.alignment = .right
+        opacityValue.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        petScaleValue.widthAnchor.constraint(equalToConstant: 44).isActive = true
+
+        let opacityTarget = SliderValueUpdater(slider: threadOpacitySlider, label: opacityValue)
+        let petScaleTarget = SliderValueUpdater(slider: petScaleSlider, label: petScaleValue)
+        threadOpacitySlider.target = opacityTarget
+        threadOpacitySlider.action = #selector(SliderValueUpdater.updateLabel)
+        petScaleSlider.target = petScaleTarget
+        petScaleSlider.action = #selector(SliderValueUpdater.updateLabel)
+
+        let grid = NSGridView(views: [
+            [NSTextField(labelWithString: "Thread panel opacity"), threadOpacitySlider, opacityValue],
+            [NSTextField(labelWithString: "Pet size"), petScaleSlider, petScaleValue],
+            [NSView(), resizeModeButton, NSView()]
+        ])
+        grid.column(at: 0).xPlacement = .trailing
+        grid.column(at: 1).xPlacement = .fill
+        grid.column(at: 2).xPlacement = .trailing
+        grid.rowSpacing = 10
+        grid.columnSpacing = 10
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        objc_setAssociatedObject(grid, &Self.sliderTargetsAssociationKey, [opacityTarget, petScaleTarget], .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        return grid
+    }
+
     private func makeFocusTimerAccessoryView(
         hoursField: NSTextField,
         minutesField: NSTextField,
@@ -680,5 +799,24 @@ private enum PetSwitchError: LocalizedError {
         case .petNotFound(let petID):
             "No compatible installed pet named '\(petID)' was found."
         }
+    }
+}
+
+@MainActor
+private final class SliderValueUpdater: NSObject {
+    private weak var slider: NSSlider?
+    private weak var label: NSTextField?
+
+    init(slider: NSSlider, label: NSTextField) {
+        self.slider = slider
+        self.label = label
+    }
+
+    @objc func updateLabel() {
+        guard let slider, let label else {
+            return
+        }
+
+        label.stringValue = "\(Int(slider.doubleValue * 100))%"
     }
 }
