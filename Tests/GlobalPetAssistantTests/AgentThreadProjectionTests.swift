@@ -66,19 +66,19 @@ struct AgentThreadProjectionTests {
     }
 
     @Test
-    func terminalPluginSendMessageCapabilityIsExposedToThreadRows() {
+    func terminalPluginFocusCapabilityDoesNotExposeReplyControlToThreadRows() {
         let now = Date(timeIntervalSince1970: 1_000)
         let agent = AgentSession(
             id: "codex-session",
             kind: .codex,
-            controlRoutes: [.terminalPlugin: [.observe, .sendMessage]],
+            capabilityRoutes: [.terminalPlugin: [.observe, .focus]],
             status: .running,
             createdAt: now,
             lastSeenAt: now
         )
         let row = ThreadDisplayRow(agent: AgentThreadProjection.snapshot(for: agent))
 
-        #expect(row.canSendMessage == true)
+        #expect(row.canSendMessage == false)
     }
 
     private func session(

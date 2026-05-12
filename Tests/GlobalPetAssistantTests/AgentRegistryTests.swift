@@ -12,7 +12,7 @@ struct AgentRegistryTests {
             id: "codex-session-1",
             kind: .codex,
             status: .started,
-            controlRoutes: [.agentAppServer: [.observe]],
+            capabilityRoutes: [.agentAppServer: [.observe]],
             observedAt: observedAt,
             sourceStrength: .hookEvent,
             cwd: "/tmp/global-pet-assistant",

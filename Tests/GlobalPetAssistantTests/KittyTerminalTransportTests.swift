@@ -45,7 +45,7 @@ struct KittyTerminalTransportTests {
         let observation = try await KittyTerminalTransport(runner: runner).observe(context)
 
         #expect(observation.isReachable == true)
-        #expect(observation.capabilities == Set<AgentCapability>([.observe, .sendMessage]))
+        #expect(observation.capabilities == Set<AgentCapability>([.observe, .focus]))
         #expect(await runner.arguments == [["@", "--to", "unix:/tmp/kitty", "ls", "--match", "id:42"]])
     }
 
@@ -59,53 +59,18 @@ struct KittyTerminalTransportTests {
     }
 
     @Test
-    func sendMessageRejectsEmptyAndOversizedMessages() async {
-        let transport = KittyTerminalTransport(
-            runner: RecordingKittyRunner(result: RecordingKittyRunner.success),
-            maximumMessageLength: 4
-        )
-
-        await #expect(throws: TerminalTransportError.invalidMessage("Message is empty.")) {
-            try await transport.sendMessage(" ", to: kittyContext())
-        }
-
-        await #expect(throws: TerminalTransportError.invalidMessage("Message is too long.")) {
-            try await transport.sendMessage("12345", to: kittyContext())
-        }
-    }
-
-    @Test
-    func sendMessageRejectsMultilineMessages() async {
-        let transport = KittyTerminalTransport(runner: RecordingKittyRunner(result: RecordingKittyRunner.success))
-
-        await #expect(throws: TerminalTransportError.invalidMessage("Message must be a single line.")) {
-            try await transport.sendMessage("line one\nline two", to: kittyContext())
-        }
-    }
-
-    @Test
-    func sendMessageUsesStructuredArguments() async throws {
+    func focusUsesStructuredArguments() async throws {
         let runner = RecordingKittyRunner(result: RecordingKittyRunner.success)
-        try await KittyTerminalTransport(runner: runner).sendMessage("continue", to: kittyContext())
+        try await KittyTerminalTransport(runner: runner).focus(kittyContext())
 
         #expect(await runner.arguments == [
             [
                 "@",
                 "--to",
                 "unix:/tmp/kitty",
-                "send-text",
+                "focus-window",
                 "--match",
                 "id:42",
-                "continue"
-            ],
-            [
-                "@",
-                "--to",
-                "unix:/tmp/kitty",
-                "send-key",
-                "--match",
-                "id:42",
-                "ENTER"
             ]
         ])
     }

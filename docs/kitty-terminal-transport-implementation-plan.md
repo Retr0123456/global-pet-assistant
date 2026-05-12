@@ -162,19 +162,20 @@ rejected or explicitly downgraded, never silently accepted.
 
 ### TerminalTransport
 
-`TerminalTransport` is the Swift abstraction for structured terminal control.
+`TerminalTransport` is the Swift abstraction for structured terminal observation
+and focus.
 
 ```swift
 protocol TerminalTransport {
     var integrationKind: TerminalIntegrationKind { get }
 
     func observe(_ context: TerminalSessionContext) async throws -> TerminalObservation
-    func sendMessage(_ text: String, to context: TerminalSessionContext) async throws
+    func focus(_ context: TerminalSessionContext) async throws
 }
 ```
 
-`TerminalTransport` should stay small. Approval, denial, history reads, and
-agent-specific commands do not belong in this abstraction.
+`TerminalTransport` should stay small. Message sending, approval, denial,
+history reads, and agent-specific commands do not belong in this abstraction.
 
 ### KittyTerminalTransport
 
@@ -247,26 +248,23 @@ existing zsh hook
 The fallback is only for command flash compatibility. It must not grow into the
 agent session or control path.
 
-### Message Injection
+### Focus Action
 
-Message injection should be provider-approved and terminal-scoped:
+Terminal focus should be provider-recognized and terminal-scoped:
 
 ```text
-AgentControl.sendMessage
-  -> session capability check
-  -> provider status check
-  -> KittyTerminalTransport.sendMessage
+FocusRouter
+  -> trusted terminal target check
+  -> KittyTerminalTransport.focus
   -> kitty plugin control endpoint
-  -> target terminal input
+  -> target terminal window
 ```
 
 Rules:
 
-- Reject empty or oversized messages.
-- Normalize newline behavior so one intentional submit happens.
-- Do not send messages to sessions without `send-message`.
-- Do not send messages when the terminal target is stale.
-- Do not log full message text by default.
+- Do not focus when the terminal target is stale.
+- Do not fall back to text injection or generic keyboard events.
+- Do not log terminal content.
 
 ## Implementation Phases
 
@@ -350,15 +348,16 @@ Tasks:
 - Add `TerminalTransportError`.
 - Add optional `BaseTerminalTransport` only if shared validation would remove
   real duplication.
-- Add `AgentControlTransportKind.terminalPlugin`.
+- Add `AgentCapabilityRouteKind.terminalPlugin` as a notification/focus route,
+  not an `AgentControlTransport`.
 - Add capability mapping from terminal plugin availability to
-  `observe` / `send-message`.
+  `observe` / `focus`.
 
 Acceptance criteria:
 
-- `TerminalTransport` has only `observe` and `sendMessage`.
+- `TerminalTransport` has only `observe` and `focus`.
 - There are no approval or denial methods.
-- Missing capability prevents send.
+- Missing capability prevents specific terminal focus.
 - Unit tests cover unsupported and stale-target errors.
 
 ### Phase 5: KittyTerminalTransport Observe
@@ -379,25 +378,24 @@ Acceptance criteria:
 - A reachable kitty context returns `TerminalObservation`.
 - No shell command string construction exists.
 
-### Phase 6: KittyTerminalTransport Send Message
+### Phase 6: KittyTerminalTransport Focus
 
 Tasks:
 
-- Implement `sendMessage`.
+- Implement `focus`.
 - Gate by `AgentRegistry` session existence.
-- Gate by `send-message` capability.
+- Gate by `focus` capability.
 - Gate by provider-approved session kind and status.
 - Gate by user/config allowlisting.
-- Send through kitty plugin control endpoint or structured remote-control path.
-- Normalize text submission.
+- Focus through kitty plugin control endpoint or structured remote-control path.
 
 Acceptance criteria:
 
-- Known provider-approved session can receive a message.
-- Unknown terminal session cannot receive a message.
-- Session without `send-message` cannot receive a message.
+- Known provider-approved session can focus its terminal target.
+- Unknown terminal session cannot be focused.
+- Session without `focus` cannot focus a terminal target.
 - Approval and denial remain unsupported.
-- Failed send does not mutate agent status to completed or failed.
+- Failed focus does not mutate agent status to completed or failed.
 
 ### Phase 7: Kitty Plugin Prototype
 
@@ -423,7 +421,7 @@ Tasks:
 
 - Let `CodexProvider` consume terminal plugin events as supporting evidence.
 - Add `ClaudeCodeProvider` support only after Codex behavior is clean.
-- Use provider recognition before adding terminal `send-message` capability.
+- Use provider recognition before adding terminal `focus` capability.
 - Preserve hook-backed identity as stronger than terminal plugin evidence.
 
 Acceptance criteria:
@@ -457,7 +455,7 @@ Unit tests:
 - Ignored command list suppresses noisy events.
 - `KittyTargetResolver` rejects missing session id or invalid endpoint.
 - `KittyTerminalTransport` rejects non-kitty contexts.
-- `KittyTerminalTransport.sendMessage` rejects empty and oversized messages.
+- `KittyTerminalTransport.focus` rejects stale targets.
 - Approval and denial remain unsupported through terminal plugin transport.
 
 Integration tests:
@@ -465,7 +463,7 @@ Integration tests:
 - Terminal plugin receiver accepts a valid local event.
 - Command completion event creates one flash message.
 - Command flash does not create `AgentSession`.
-- Known agent session can gain `send-message` only with valid terminal context.
+- Known agent session can gain `focus` only with valid terminal context.
 
 Manual tests:
 
@@ -484,8 +482,8 @@ Then verify:
 
 - A successful long command flashes.
 - A failed command flashes.
-- A known Codex terminal session can receive a follow-up message only when the
-  UI/session exposes `send-message`.
+- A known Codex terminal session can focus its terminal target only when the
+  UI/session exposes `focus`.
 - Permission approval controls remain absent.
 
 ## Rejected Shortcuts

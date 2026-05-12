@@ -1,7 +1,7 @@
 import Foundation
 
 protocol AgentControlTransport {
-    var kind: AgentControlTransportKind { get }
+    var kind: AgentCapabilityRouteKind { get }
 
     func capabilities(for session: AgentSession) -> Set<AgentCapability>
 }

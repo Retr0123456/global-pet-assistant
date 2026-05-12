@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct TerminalPluginProviderIntegrationTests {
     @Test
-    func codexTerminalEventCanCreateRecognizedSessionWithSendMessageRoute() {
+    func codexTerminalEventCanCreateRecognizedSessionWithFocusRoute() {
         let service = AgentDiscoveryService()
 
         service.receiveTerminalPluginEvent(codexTerminalEvent(exitCode: nil))
@@ -13,8 +13,9 @@ struct TerminalPluginProviderIntegrationTests {
         let session = service.snapshot.sessions.first
         #expect(session?.kind == .codex)
         #expect(session?.status == .running)
-        #expect(session?.controlRoutes[.terminalPlugin] == [.observe, .sendMessage])
-        #expect(session?.capabilities.contains(.sendMessage) == true)
+        #expect(session?.capabilityRoutes[.terminalPlugin] == [.observe, .focus])
+        #expect(session?.capabilities.contains(.focus) == true)
+        #expect(session?.capabilities.contains(.sendMessage) == false)
         #expect(session?.metadata["terminal_kind"] == .string("kitty"))
     }
 
@@ -30,7 +31,7 @@ struct TerminalPluginProviderIntegrationTests {
     }
 
     @Test
-    func codexTerminalEventWithoutControlEndpointCannotSendMessage() {
+    func codexTerminalEventWithoutControlEndpointCannotFocusSpecificTarget() {
         let service = AgentDiscoveryService()
         var event = codexTerminalEvent(exitCode: nil)
         event.terminal.controlEndpoint = nil
@@ -38,12 +39,12 @@ struct TerminalPluginProviderIntegrationTests {
         service.receiveTerminalPluginEvent(event)
 
         let session = service.snapshot.sessions.first
-        #expect(session?.controlRoutes[.terminalPlugin] == [.observe])
-        #expect(session?.capabilities.contains(.sendMessage) == false)
+        #expect(session?.capabilityRoutes[.terminalPlugin] == [.observe])
+        #expect(session?.capabilities.contains(.focus) == false)
     }
 
     @Test
-    func codexTerminalEventWithInvalidControlEndpointCannotSendMessage() {
+    func codexTerminalEventWithInvalidControlEndpointCannotFocusSpecificTarget() {
         let service = AgentDiscoveryService()
         var event = codexTerminalEvent(exitCode: nil)
         event.terminal.controlEndpoint = "tcp:192.168.1.2:5000"
@@ -51,8 +52,8 @@ struct TerminalPluginProviderIntegrationTests {
         service.receiveTerminalPluginEvent(event)
 
         let session = service.snapshot.sessions.first
-        #expect(session?.controlRoutes[.terminalPlugin] == [.observe])
-        #expect(session?.capabilities.contains(.sendMessage) == false)
+        #expect(session?.capabilityRoutes[.terminalPlugin] == [.observe])
+        #expect(session?.capabilities.contains(.focus) == false)
     }
 
     @Test

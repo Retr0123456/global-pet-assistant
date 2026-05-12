@@ -23,6 +23,28 @@ The project goal is to separate the pet into two layers:
 - Support clickable actions such as opening an app, URL, file, folder, or agent session.
 - Keep the event API local-first and safe by default.
 
+## Design Boundary
+
+Global Pet Assistant is a desktop pet, local notification runtime, and safe focus
+surface for development tools. The product boundary is notification plus focus:
+
+- Keep pet state, animation playback, window behavior, and transient desktop
+  interactions reliable before expanding integrations.
+- Accept short command flash notifications from shells, build scripts, terminal
+  plugins, and local tools.
+- Accept long-lived coding-agent lifecycle notifications from trusted hooks or
+  structured plugin events, then show them in the thread panel.
+- Focus the relevant app, terminal window, tab, or session when a trusted
+  integration provides enough structured target metadata.
+- Do not use terminal plugins for reverse input, text injection, permission
+  approval, permission denial, or raw TUI control.
+
+Terminal integrations are notification and focus adapters. Without a terminal
+plugin, the app can focus the terminal application. With a trusted terminal
+plugin, the app can focus a more specific terminal surface such as a kitty window,
+tab, or session. Any future agent-control feature must come from a first-class
+agent or app-server protocol, not from typing into a terminal.
+
 ## Primary Use Cases
 
 - Codex CLI or Claude Code hooks notify the pet when a task starts, completes, fails, or waits for input.
@@ -33,16 +55,21 @@ The project goal is to separate the pet into two layers:
 ## Recommended Architecture
 
 ```text
-third-party hooks / apps / agents
+hooks / scripts / terminal plugins / agents
         |
         v
-local event API
+notification ingress
+        |
+        +--> command flash projection
+        |
+        +--> agent session registry
         |
         v
-event router + priority queue
+event router + thread projection
         |
-        v
-pet state machine
+        +--> pet state machine
+        |
+        +--> focus router
         |
         v
 AppKit / Core Animation renderer
@@ -473,6 +500,7 @@ The bundled default pet is an original generated Codex-compatible package under
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Notification And Focus Architecture Reduction Plan](docs/notification-focus-architecture-reduction-plan.md)
 - [Assets And Licensing](docs/assets-and-licensing.md)
 - [Codex Hook Integration](docs/codex-hook-integration.md)
 - [Desktop Pet Experience Plan](docs/desktop-experience-plan.md)

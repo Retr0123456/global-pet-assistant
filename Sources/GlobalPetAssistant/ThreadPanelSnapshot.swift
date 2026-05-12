@@ -43,7 +43,9 @@ struct ThreadDisplayRow: Equatable, Identifiable {
         self.action = nil
         self.state = Self.state(for: thread.status)
         self.status = thread.status
-        self.canSendMessage = thread.capabilities.contains(.sendMessage)
+        self.canSendMessage = thread.capabilityRoutes.contains { route, capabilities in
+            route != .terminalPlugin && capabilities.contains(.sendMessage)
+        }
     }
 
     private static func state(for status: PetThreadStatus) -> PetAnimationState {

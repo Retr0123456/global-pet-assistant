@@ -40,9 +40,9 @@ Kitty watcher / plugin
   -> AgentThreadProjection
   -> long-lived agent thread panel
 
-AgentControl
-  -> AgentControlTransportKind.terminalPlugin
-  -> TerminalTransport
+ThreadPanel / notification action
+  -> AgentCapabilityRouteKind.terminalPlugin
+  -> TerminalTransport.focus
   -> KittyTerminalTransport
   -> Kitty plugin / remote-control endpoint
 ```
@@ -98,24 +98,24 @@ not add kitty window ids, tab ids, or control socket details directly to
 
 ## TerminalTransport
 
-`TerminalTransport` is the terminal control abstraction:
+`TerminalTransport` is the terminal observation and focus abstraction:
 
 ```swift
 protocol TerminalTransport {
     var integrationKind: TerminalIntegrationKind { get }
 
     func observe(_ context: TerminalSessionContext) async throws -> TerminalObservation
-    func sendMessage(_ text: String, to context: TerminalSessionContext) async throws
+    func focus(_ context: TerminalSessionContext) async throws
 }
 ```
 
-It is used behind `AgentControlTransportKind.terminalPlugin`. Agent-facing
-capabilities are derived from the combination of:
+It is used as terminal integration metadata for notification and focus.
+Agent-facing capabilities are derived from the combination of:
 
 - Provider-approved session identity.
 - Terminal plugin availability.
 - Transport support.
-- User or config allowlisting for mutating controls.
+- Trusted terminal focus metadata.
 
 ## KittyTerminalTransport
 
@@ -125,9 +125,9 @@ Responsibilities:
 
 - Validate that a target kitty session still exists.
 - Observe structured kitty session metadata.
-- Send follow-up text to a known provider-approved terminal session.
-- Return explicit unsupported errors for permission approval and denial.
-- Log control attempts without logging full message text by default.
+- Focus a known kitty window when trusted target metadata is present.
+- Return explicit unsupported errors for reverse input and permission control.
+- Log focus attempts without logging terminal content.
 
 Non-responsibilities:
 
@@ -163,13 +163,14 @@ Terminal plugin transport may expose:
 
 ```text
 observe
-send-message
+focus
 ```
 
 Terminal plugin transport must not expose:
 
 ```text
 read-history
+send-message
 approve-permission
 deny-permission
 ```
@@ -183,12 +184,9 @@ injection.
 - Require local authentication for terminal plugin event writes.
 - Require a schema version on terminal plugin events.
 - Rate limit command flash events.
-- Gate `send-message` behind session capability and explicit user/config
-  allowlisting.
-- Reject empty or oversized messages.
+- Gate terminal focus behind trusted target metadata.
 - Never fall back to raw terminal typing when kitty control fails.
-- Log target metadata and result status; do not log full message text unless
-  debug logging is explicitly enabled.
+- Log target metadata and result status; do not log terminal content.
 
 ## Implementation Order
 
@@ -198,7 +196,7 @@ injection.
 3. Add command flash projection for kitty command completion events.
 4. Let providers consume terminal plugin events as optional session evidence.
 5. Add `KittyTerminalTransport.observe`.
-6. Add `KittyTerminalTransport.sendMessage` for known provider-approved sessions.
+6. Add `KittyTerminalTransport.focus` for trusted kitty targets.
 
 ## Acceptance Criteria
 
@@ -206,8 +204,8 @@ injection.
   `AgentRegistry`.
 - A kitty event cannot create a coding-agent session unless an `AgentProvider`
   recognizes it.
-- A known Codex or Claude Code session can advertise `send-message` through
-  `AgentControlTransportKind.terminalPlugin` only when a valid
+- A known Codex or Claude Code session can advertise `focus` through
+  terminal plugin metadata only when a valid
   `TerminalSessionContext` exists.
 - No approval or denial control is exposed through kitty.
 - No raw terminal scanning or tmux fallback exists.

@@ -81,7 +81,7 @@ struct CodexProvider: AgentProvider {
             id: sessionID,
             kind: .codex,
             status: status,
-            controlRoutes: [.terminalPlugin: terminalCapabilities],
+            capabilityRoutes: [.terminalPlugin: terminalCapabilities],
             observedAt: terminalEvent.occurredAt,
             sourceStrength: .terminalPlugin,
             cwd: terminalEvent.terminal.cwd,
@@ -94,7 +94,7 @@ struct CodexProvider: AgentProvider {
     private func terminalPluginCapabilities(for context: TerminalSessionContext) -> Set<AgentCapability> {
         do {
             _ = try KittyTargetResolver().resolve(context)
-            return [.observe, .sendMessage]
+            return [.observe, .focus]
         } catch {
             return [.observe]
         }

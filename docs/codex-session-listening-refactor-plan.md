@@ -190,7 +190,8 @@ Use these names consistently:
 
 - `AgentSession.id`: canonical coding-agent session identity.
 - `LocalPetEvent.source`: generic event source label only.
-- `AgentControlTransportKind`: agent control/observation transport.
+- `AgentCapabilityRouteKind`: session capability route for observation, focus,
+  or future first-class agent control.
 - `TerminalTransport`: trusted terminal plugin control abstraction.
 - `KittyTerminalTransport`: first `TerminalTransport` implementation, not an
   agent provider.
@@ -229,7 +230,7 @@ Goal: create the permanent agent architecture skeleton before wiring Codex.
 Add:
 
 - `AgentKind`
-- `AgentControlTransportKind`
+- `AgentCapabilityRouteKind`
 - `AgentStatus`
 - `AgentCapability`
 - `AgentSession`
@@ -275,7 +276,7 @@ Registry requirements:
 - Refresh `lastSeenAt` on accepted updates.
 - Merge metadata conservatively.
 - Preserve stronger known fields over weaker inferred fields.
-- Track `AgentKind` and `AgentControlTransportKind`.
+- Track `AgentKind` and `AgentCapabilityRouteKind`.
 - Support expiry without deleting completed sessions immediately.
 
 Suggested merge strength:

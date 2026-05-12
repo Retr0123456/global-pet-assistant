@@ -13,12 +13,12 @@ final class AgentRegistry {
             return existing
         }
 
-        let routes = update.controlRoutes ?? [:]
+        let routes = update.capabilityRoutes ?? [:]
         let capabilities = update.capabilities ?? Set(routes.values.flatMap { $0 })
         let session = AgentSession(
             id: update.id,
             kind: update.kind,
-            controlRoutes: routes,
+            capabilityRoutes: routes,
             status: update.status ?? .unknown,
             capabilities: capabilities,
             createdAt: update.observedAt,
@@ -91,18 +91,18 @@ final class AgentRegistry {
         apply(trimmed(update.message), to: &session.message, key: "message", updateStrength: update.sourceStrength, strengths: &strengths)
         apply(trimmed(update.pendingPermissionDescription), to: &session.pendingPermissionDescription, key: "pendingPermissionDescription", updateStrength: update.sourceStrength, strengths: &strengths)
 
-        if let routes = update.controlRoutes,
-           shouldAccept(key: "controlRoutes", updateStrength: update.sourceStrength, strengths: strengths) {
-            session.controlRoutes = routes
-            strengths["controlRoutes"] = update.sourceStrength
+        if let routes = update.capabilityRoutes,
+           shouldAccept(key: "capabilityRoutes", updateStrength: update.sourceStrength, strengths: strengths) {
+            session.capabilityRoutes = routes
+            strengths["capabilityRoutes"] = update.sourceStrength
         }
 
         if let capabilities = update.capabilities,
            shouldAccept(key: "capabilities", updateStrength: update.sourceStrength, strengths: strengths) {
             session.capabilities = capabilities
             strengths["capabilities"] = update.sourceStrength
-        } else if update.controlRoutes != nil {
-            session.capabilities = Set(session.controlRoutes.values.flatMap { $0 })
+        } else if update.capabilityRoutes != nil {
+            session.capabilities = Set(session.capabilityRoutes.values.flatMap { $0 })
         }
 
         for (key, value) in update.metadata {
@@ -164,7 +164,7 @@ final class AgentRegistry {
     private func initialStrengths(for update: AgentSessionUpdate) -> [String: AgentSignalStrength] {
         var strengths: [String: AgentSignalStrength] = [
             "status": update.sourceStrength,
-            "controlRoutes": update.sourceStrength,
+            "capabilityRoutes": update.sourceStrength,
             "capabilities": update.sourceStrength
         ]
         let optionalFields: [(String, Any?)] = [

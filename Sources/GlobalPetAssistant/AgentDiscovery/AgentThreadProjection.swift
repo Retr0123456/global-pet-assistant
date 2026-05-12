@@ -9,7 +9,7 @@ enum AgentThreadProjection {
         AgentThreadSnapshot(
             id: session.id,
             kind: session.kind,
-            controlRoutes: session.controlRoutes,
+            capabilityRoutes: session.capabilityRoutes,
             status: threadStatus(for: session),
             title: title(for: session),
             context: context(for: session),

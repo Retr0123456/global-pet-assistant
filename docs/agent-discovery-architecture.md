@@ -76,7 +76,7 @@ enum AgentKind: String, Codable, Equatable {
     case opencode
 }
 
-enum AgentControlTransportKind: String, Codable, Equatable {
+enum AgentCapabilityRouteKind: String, Codable, Equatable {
     case agentAppServer = "agent-app-server"
     case terminalPlugin = "terminal-plugin"
 }
@@ -113,6 +113,7 @@ enum AgentStatus: String, Codable, Equatable {
 
 enum AgentCapability: String, Codable, Equatable {
     case observe
+    case focus
     case readHistory = "read-history"
     case sendMessage = "send-message"
     case approvePermission = "approve-permission"
@@ -122,7 +123,7 @@ enum AgentCapability: String, Codable, Equatable {
 struct AgentSession: Codable, Equatable, Identifiable {
     var id: String
     var kind: AgentKind
-    var controlRoutes: [AgentControlTransportKind: Set<AgentCapability>]
+    var capabilityRoutes: [AgentCapabilityRouteKind: Set<AgentCapability>]
     var status: AgentStatus
     var capabilities: Set<AgentCapability>
     var createdAt: Date
@@ -139,7 +140,7 @@ struct AgentSession: Codable, Equatable, Identifiable {
 }
 ```
 
-`capabilities` is the union of all values in `controlRoutes`; it is kept as a
+`capabilities` is the union of all values in `capabilityRoutes`; it is kept as a
 convenience projection for UI and guard checks, not as a separate source of
 truth.
 
@@ -262,9 +263,9 @@ Kitty plugin / kitten
   -> AgentProvider
   -> AgentRegistry
 
-AgentControl
-  -> TerminalTransport
-  -> KittyTerminalTransport
+ThreadPanel / notification action
+  -> terminal focus metadata
+  -> KittyTerminalTransport.focus
   -> Kitty plugin / remote-control endpoint
 ```
 
@@ -273,14 +274,14 @@ Terminal command results and coding-agent sessions must remain separate:
 - A normal shell command completion becomes a short flash event.
 - A terminal event recognized by `CodexProvider`, `ClaudeCodeProvider`, or
   another provider can update `AgentRegistry`.
-- `KittyTerminalTransport` may inject follow-up text only into a known
-  provider-approved terminal session.
-- `KittyTerminalTransport` must not approve or deny permissions by typing text.
+- `KittyTerminalTransport` may focus only a trusted terminal target.
+- `KittyTerminalTransport` must not inject text, approve, or deny permissions by
+  typing text.
 
 ### TerminalTransport
 
-`TerminalTransport` describes structured interaction with one trusted terminal
-integration. The first implementation should be `KittyTerminalTransport`.
+`TerminalTransport` describes observation and focus for one trusted terminal
+integration. The first implementation is `KittyTerminalTransport`.
 
 Recommended protocol shape:
 
@@ -289,14 +290,13 @@ protocol TerminalTransport {
     var integrationKind: TerminalIntegrationKind { get }
 
     func observe(_ context: TerminalSessionContext) async throws -> TerminalObservation
-    func sendMessage(_ text: String, to context: TerminalSessionContext) async throws
+    func focus(_ context: TerminalSessionContext) async throws
 }
 ```
 
-Terminal transports are implementation details behind
-`AgentControlTransportKind.terminalPlugin`. The agent model should not grow
-terminal-specific fields such as kitty window ids or pane ids directly; those
-belong inside `TerminalSessionContext`.
+Terminal transports are integration details for notification and focus. The
+agent model should not grow terminal-specific fields such as kitty window ids or
+pane ids directly; those belong inside `TerminalSessionContext`.
 
 ### AgentControlTransport
 
@@ -307,14 +307,14 @@ Potential capability policy:
 | Transport | Capabilities |
 | --- | --- |
 | `agent-app-server` | Contract-dependent: may expose `observe`, `read-history`, `send-message`, `approve-permission`, `deny-permission` after a concrete protocol exists. |
-| `terminal-plugin` | `observe`, `send-message` for provider-approved sessions only. |
+| `terminal-plugin` | `observe`, `focus` for trusted terminal targets only. |
 
 Current implementation policy:
 
 | Transport | First exposed behavior |
 | --- | --- |
 | `agent-app-server` | Placeholder only until the protocol exists. |
-| `terminal-plugin` | Placeholder until `TerminalTransport` and `KittyTerminalTransport` are implemented. |
+| `terminal-plugin` | Notification and focus only; no reverse input. |
 
 Transports are capability providers, not identity providers. Providers and hook
 envelopes may record context metadata such as `pid`, `tty`, or
@@ -377,7 +377,7 @@ The long-lived agent thread panel should read `AgentThreadSnapshot`, not
 struct AgentThreadSnapshot: Equatable, Identifiable {
     var id: String
     var kind: AgentKind
-    var controlRoutes: [AgentControlTransportKind: Set<AgentCapability>]
+    var capabilityRoutes: [AgentCapabilityRouteKind: Set<AgentCapability>]
     var status: PetThreadStatus
     var title: String
     var context: String
@@ -511,7 +511,8 @@ For trusted terminal plugin transport design, see
 
 ### Phase 5: Mutating Controls
 
-- Enable `send-message` for transports with explicit support.
+- Enable `send-message` only for future first-class agent transports with
+  explicit support.
 - Enable `approve-permission` and `deny-permission` only for safe provider
   protocols.
 - Add audit logs for every mutating control.

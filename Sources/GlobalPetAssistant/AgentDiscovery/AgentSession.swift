@@ -83,10 +83,9 @@ enum AgentKind: String, Codable, Equatable, Sendable {
     case opencode
 }
 
-enum AgentControlTransportKind: String, Codable, Equatable, Hashable, Sendable {
+enum AgentCapabilityRouteKind: String, Codable, Equatable, Hashable, Sendable {
     case agentAppServer = "agent-app-server"
     case terminalPlugin = "terminal-plugin"
-    case tmux
 }
 
 enum AgentStatus: String, Codable, Equatable, Sendable {
@@ -100,6 +99,7 @@ enum AgentStatus: String, Codable, Equatable, Sendable {
 
 enum AgentCapability: String, Codable, Equatable, Hashable, Sendable {
     case observe
+    case focus
     case readHistory = "read-history"
     case sendMessage = "send-message"
     case approvePermission = "approve-permission"
@@ -124,7 +124,7 @@ enum AgentSignalStrength: Int, Codable, Comparable, Sendable {
 struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     var id: String
     var kind: AgentKind
-    var controlRoutes: [AgentControlTransportKind: Set<AgentCapability>]
+    var capabilityRoutes: [AgentCapabilityRouteKind: Set<AgentCapability>]
     var status: AgentStatus
     var capabilities: Set<AgentCapability>
     var createdAt: Date
@@ -141,7 +141,7 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     init(
         id: String,
         kind: AgentKind,
-        controlRoutes: [AgentControlTransportKind: Set<AgentCapability>] = [:],
+        capabilityRoutes: [AgentCapabilityRouteKind: Set<AgentCapability>] = [:],
         status: AgentStatus = .unknown,
         capabilities: Set<AgentCapability> = [],
         createdAt: Date,
@@ -157,10 +157,10 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     ) {
         self.id = id
         self.kind = kind
-        self.controlRoutes = controlRoutes
+        self.capabilityRoutes = capabilityRoutes
         self.status = status
         self.capabilities = capabilities.isEmpty
-            ? Set(controlRoutes.values.flatMap { $0 })
+            ? Set(capabilityRoutes.values.flatMap { $0 })
             : capabilities
         self.createdAt = createdAt
         self.lastSeenAt = lastSeenAt
@@ -179,7 +179,7 @@ struct AgentSessionUpdate: Equatable, Sendable {
     var id: String
     var kind: AgentKind
     var status: AgentStatus?
-    var controlRoutes: [AgentControlTransportKind: Set<AgentCapability>]?
+    var capabilityRoutes: [AgentCapabilityRouteKind: Set<AgentCapability>]?
     var capabilities: Set<AgentCapability>?
     var observedAt: Date
     var sourceStrength: AgentSignalStrength
@@ -196,7 +196,7 @@ struct AgentSessionUpdate: Equatable, Sendable {
         id: String,
         kind: AgentKind,
         status: AgentStatus? = nil,
-        controlRoutes: [AgentControlTransportKind: Set<AgentCapability>]? = nil,
+        capabilityRoutes: [AgentCapabilityRouteKind: Set<AgentCapability>]? = nil,
         capabilities: Set<AgentCapability>? = nil,
         observedAt: Date,
         sourceStrength: AgentSignalStrength,
@@ -212,7 +212,7 @@ struct AgentSessionUpdate: Equatable, Sendable {
         self.id = id
         self.kind = kind
         self.status = status
-        self.controlRoutes = controlRoutes
+        self.capabilityRoutes = capabilityRoutes
         self.capabilities = capabilities
         self.observedAt = observedAt
         self.sourceStrength = sourceStrength
@@ -260,7 +260,7 @@ struct AgentRegistrySnapshot: Equatable, Sendable {
 struct AgentThreadSnapshot: Equatable, Identifiable, Sendable {
     var id: String
     var kind: AgentKind
-    var controlRoutes: [AgentControlTransportKind: Set<AgentCapability>]
+    var capabilityRoutes: [AgentCapabilityRouteKind: Set<AgentCapability>]
     var status: PetThreadStatus
     var title: String
     var context: String

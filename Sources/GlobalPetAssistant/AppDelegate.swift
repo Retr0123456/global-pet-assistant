@@ -225,43 +225,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func sendAgentMessage(_ message: String, to thread: ThreadDisplayRow) {
-        guard thread.kind == .agent,
-              let session = agentDiscoveryService?.session(id: thread.id) else {
-            return
-        }
-
-        Task {
-            do {
-                AuditLogger.appendRuntime(status: "agent_message_send_started", message: thread.id)
-                let control = TerminalPluginAgentControl(terminalTransport: try KittyTerminalTransport())
-                try await control.sendMessage(message, to: session)
-                await MainActor.run {
-                    _ = self.acceptEvent(LocalPetEvent(
-                        source: "agent-control:\(thread.id)",
-                        type: "flash",
-                        level: .success,
-                        message: "Message sent",
-                        state: .review,
-                        ttlMs: 2_500,
-                        transient: true
-                    ))
-                    AuditLogger.appendRuntime(status: "agent_message_send_succeeded", message: thread.id)
-                }
-            } catch {
-                await MainActor.run {
-                    _ = self.acceptEvent(LocalPetEvent(
-                        source: "agent-control:\(thread.id)",
-                        type: "flash",
-                        level: .danger,
-                        message: "Message send failed",
-                        state: .failed,
-                        ttlMs: 4_500,
-                        transient: true
-                    ))
-                    AuditLogger.appendRuntime(status: "agent_message_send_failed", message: String(describing: error))
-                }
-            }
-        }
+        _ = message
+        AuditLogger.appendRuntime(status: "agent_message_send_unavailable", message: thread.id)
     }
 
     func menuWillOpen(_ menu: NSMenu) {
