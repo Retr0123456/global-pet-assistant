@@ -1,66 +1,176 @@
 # Global Pet Assistant
 
-[English](README.md)
+<p align="center">
+  <img src="Assets/AppIcon/AppIcon.png" width="112" height="112" alt="Global Pet Assistant icon">
+</p>
 
-Global Pet Assistant 是一个轻量级 macOS 桌面宠物，用来展示本地开发通知。它以
-一个小型 AppKit 浮窗宠物运行，只监听本机事件，并把工具状态转换成宠物动作、
-短状态提示和可操作的线程提醒。
+<p align="center">
+  一个本地优先的 macOS 桌面宠物，把 coding agent、终端和构建状态变成屏幕上的小伙伴。
+</p>
 
-## 它是什么
+<p align="center">
+  <a href="README.md">English</a>
+  · <a href="docs/README.zh-CN.md">文档中心</a>
+  · <a href="docs/integrations.zh-CN.md">集成配置</a>
+  · <a href="https://github.com/Retr0123456/global-pet-assistant/releases/latest">下载</a>
+</p>
 
-- 一个常驻桌面的透明 macOS 宠物。
-- 一个本地优先的开发通知入口。
-- 一个可以被 Codex、Kitty、构建脚本和本地工具驱动的状态展示层。
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="https://github.com/Retr0123456/global-pet-assistant/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Retr0123456/global-pet-assistant?sort=semver"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS-lightgrey.svg">
+  <img alt="Swift" src="https://img.shields.io/badge/Swift-6.2-orange.svg">
+</p>
 
-## 可以做什么
+Global Pet Assistant 是给本地开发工作流用的原生 AppKit 小工具。它会渲染一个透明、
+常驻桌面的宠物，接收可信本地集成发来的事件，并把这些事件变成宠物动作、短状态
+提示和持久的 agent 线程提醒。
 
-- 播放 Codex 兼容宠物资源的 idle、running、waiting、success、failure、
-  review、waving、jumping、running-left、running-right 等动作。
-- 显示命令结果、构建状态和本地工具通知的短暂 flash 消息。
-- 显示编码 agent 会话的长期 thread panel 提醒，直到用户手动关闭。
-- 打开可信通知动作，例如 App、URL、文件、文件夹，或受支持的终端/会话目标。
-- 从菜单栏或宠物右键菜单启动 Focus Timer。
-- 从菜单切换兼容宠物资源包。
-- 从宠物右键菜单的 `Resize Pet` 打开大小滑杆并调整宠物尺寸。
-- 将应用状态、日志、导入的宠物和本地 token 保存在
-  `~/.global-pet-assistant`。
+它刻意保持轻量：不需要托管账号，不依赖云端 relay，默认也没有公网 webhook 监听。
+你的工具只会和 `127.0.0.1` 上受本地 bearer token 保护的服务通信。
+
+## 亮点
+
+| 模块 | 能力 |
+| --- | --- |
+| 原生桌面宠物 | 透明 AppKit 窗口、拖拽移动、边缘吸附、尺寸调整、菜单栏控制和流畅 spritesheet 动画。 |
+| Coding agent 状态 | Codex hooks 支持 running、等待批准、completed、review 等状态。 |
+| 终端反馈 | Kitty watcher plugin 提供命令开始/结束 flash，不需要修改 shell 启动文件。 |
+| 本地事件 API | `petctl` 和 localhost HTTP 事件入口，可接入脚本、构建和本地工具。 |
+| 持久提醒 | thread panel 会保留长期提醒，直到用户手动关闭，而不是像 toast 一样自动消失。 |
+| 保守动作系统 | 通知点击只能打开 allowlist 里的 App、URL、文件、文件夹或受支持终端/会话目标。 |
+| 宠物资源包 | 可导入 Codex 兼容的 `1536x1872` spritesheet 资源包到应用自己的宠物目录。 |
 
 ## 安装
 
-从 [GitHub Releases 页面](https://github.com/Retr0123456/global-pet-assistant/releases/latest)
+从 [GitHub Releases](https://github.com/Retr0123456/global-pet-assistant/releases/latest)
 下载最新 DMG，打开后把 `GlobalPetAssistant.app` 拖到 `/Applications`。
-
-启动应用：
 
 ```bash
 open /Applications/GlobalPetAssistant.app
+curl -fsS http://127.0.0.1:17321/healthz
 ```
 
 当前 beta 版本还没有 notarize。如果 macOS 阻止首次启动，可以在 Finder 中
 Control-click -> Open，或在 System Settings 中允许打开。
 
-## 推荐集成
+## 快速开始
 
-先二选一配置：
+先选择一个集成。之后也可以两个都安装。
 
-- **Kitty plugin**：如果你使用 kitty，并且想要命令 flash 反馈和终端上下文，
-  优先选它。它通过 kitty watcher 观察命令开始/结束，不需要改 shell 启动文件。
-- **Codex hooks**：如果你主要想要 Codex 生命周期事件，例如 running、等待批准、
-  turn 完成提醒，优先选它。
+### Kitty 命令反馈
 
-查看简洁配置文档：
-[集成配置](docs/integrations.zh-CN.md)。
+如果你主要使用 kitty，并且想看到命令开始/结束反馈，选这个。
 
-## 隐私与本地性
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
+```
 
-Global Pet Assistant 是本地优先的。应用只监听 localhost，首次启动时生成本地
-bearer token，本地 helper 工具会读取这个 token。它不需要云账号。
+完全退出并重新打开 kitty，然后运行：
+
+```zsh
+sleep 3
+false
+```
+
+`sleep 3` 应该显示短暂 success flash，`false` 应该显示短暂 failure flash。
+
+### Codex 会话提醒
+
+如果你想让宠物跟踪 Codex 生命周期事件，选这个。
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
+```
+
+安装后重启 Codex session。新的 prompt 会把会话标记为 running，需要批准时会显示
+waiting，turn 完成后会进入 thread panel，直到手动关闭。
+
+完整说明见 [集成配置](docs/integrations.zh-CN.md)。
+
+## 工作方式
+
+```text
+本地工具 / agent / terminal plugin
+        |
+        v
+petctl, Codex hooks, Kitty watcher, localhost HTTP
+        |
+        v
+本地事件路由 + action allowlist
+        |
+        v
+宠物动画、flash 消息或 thread 提醒
+```
+
+Global Pet Assistant 会把运行状态放在 `~/.global-pet-assistant`：
+
+| 路径 | 用途 |
+| --- | --- |
+| `~/.global-pet-assistant/token` | 本地事件写入用的 bearer token。 |
+| `~/.global-pet-assistant/config.json` | source allowlist、宠物导入路径和运行偏好。 |
+| `~/.global-pet-assistant/logs/` | runtime、event 和 hook 日志。 |
+| `~/.global-pet-assistant/pets/` | 已导入或内置安装的宠物资源包。 |
+
+## 文档
+
+建议从这里开始：
+
+- [文档中心](docs/README.zh-CN.md)：安装、集成、架构和维护入口。
+- [集成配置](docs/integrations.zh-CN.md)：Kitty plugin 和 Codex hooks。
+- [Architecture](docs/architecture.md)：渲染器、事件 API、动作模型和本地安全边界。
+- [Assets and Licensing](docs/assets-and-licensing.md)：图标和宠物资源授权规则。
+- [Security Policy](SECURITY.md)：本地事件服务、token、日志和漏洞报告。
+- [Contributing](CONTRIBUTING.md)：开发流程和 PR 要求。
+
+## 开发
+
+环境要求：
+
+- macOS 26 SDK 或更新版本，用于当前 AppKit 界面。
+- Swift 6.2 或更新版本。
+- Xcode Command Line Tools。
+
+```bash
+swift build
+swift test
+Tools/package-debug-app.sh
+open .build/GlobalPetAssistant.app
+```
+
+运行时 smoke check：
+
+```bash
+swift run GlobalPetAssistant
+Tools/verify-event-runtime.sh
+```
+
+`Tools/verify-event-runtime.sh` 会自己启动 app。如果本地 `17321` 端口被已运行的
+app 占用，先退出旧实例。
+
+## 隐私
+
+Global Pet Assistant 是本地优先的：
+
+- 事件服务只绑定 `127.0.0.1`。
+- 事件写入需要 `Authorization: Bearer <token>`。
+- 不需要托管账号或云端 telemetry。
+- 未知 source 可以发送状态通知，但不能打开 App、URL、文件、文件夹或终端窗口。
+
+更具体的运行模型见 [Privacy](PRIVACY.md) 和 [Security Policy](SECURITY.md)。
 
 ## 卸载
 
-退出应用，删除应用包；如果你也想删除应用状态，再删除本地状态目录：
+退出应用，删除应用包；如果也想删除应用状态，再删除本地状态目录：
 
 ```bash
 rm -rf /Applications/GlobalPetAssistant.app
 rm -rf ~/.global-pet-assistant
 ```
+
+如果安装过集成，也清理它们的托管配置：
+
+- Kitty：删除 `~/.config/kitty/global-pet-assistant`，并从
+  `~/.config/kitty/kitty.conf` 删除带标记的 include block。
+- Codex hooks：从 `~/.codex/hooks.json` 删除包含
+  `global-pet-agent-bridge --source codex` 的托管命令。

@@ -1,10 +1,13 @@
 # Global Pet Assistant Kitty Plugin
 
-[English](README.md) | [集成配置](../../docs/integrations.zh-CN.md)
+[English](README.md) | [集成配置](../../docs/integrations.zh-CN.md) | [中文 README](../../README.zh-CN.md)
 
-Kitty plugin 会把 kitty shell 活动连接到 Global Pet Assistant。它安装一个
-kitty global watcher，观察命令开始/结束，并把本地 terminal-plugin 事件发送给
+Kitty plugin 会把 kitty 中的 shell 活动连接到 Global Pet Assistant。它安装一个
+kitty global watcher，观察命令开始/结束，并把本地 `terminal-plugin` 事件发送给
 应用。
+
+如果你想让长命令、失败命令和终端里的 coding-agent 上下文在桌面宠物上给出轻量
+反馈，并且不想修改 shell 启动文件，就用它。
 
 ## 安装
 
@@ -32,14 +35,19 @@ sleep 3
 false
 ```
 
-预期结果：`sleep 3` 显示短暂 success flash，`false` 显示短暂 failure flash。
+预期结果：
+
+- `sleep 3` 显示短暂 success flash。
+- `false` 显示短暂 failure flash。
 
 ## 安装文件
 
-| Path | 用途 |
+| 路径 | 用途 |
 | --- | --- |
-| `~/.config/kitty/global-pet-assistant/` | Watcher、插件配置和本地环境文件。 |
+| `~/.config/kitty/global-pet-assistant/` | Watcher、插件配置、shell integration 和本地环境文件。 |
 | `~/.config/kitty/kitty.conf` | 会被加入一个带标记的 include block。 |
+
+插件只会把事件发送给本地 app。它不需要 tmux，也不会打开公网监听。
 
 ## 卸载
 

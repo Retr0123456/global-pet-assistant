@@ -1,10 +1,13 @@
 # Global Pet Assistant Kitty Plugin
 
-[中文](README.zh-CN.md) | [Integration Setup](../../docs/integrations.md)
+[中文](README.zh-CN.md) | [Integration Setup](../../docs/integrations.md) | [Project README](../../README.md)
 
-The kitty plugin connects kitty shell activity to Global Pet Assistant. It
+The Kitty plugin connects shell activity in kitty to Global Pet Assistant. It
 installs a kitty global watcher that observes command start/end events and sends
-local terminal-plugin events to the app.
+local `terminal-plugin` events to the app.
+
+Use it when you want a small desktop flash for long-running commands, failures,
+and terminal-backed coding-agent context without editing shell startup files.
 
 ## Install
 
@@ -32,15 +35,20 @@ sleep 3
 false
 ```
 
-Expected result: the pet shows a short success flash for `sleep 3` and a short
-failure flash for `false`.
+Expected result:
+
+- `sleep 3` shows a short success flash.
+- `false` shows a short failure flash.
 
 ## Installed Files
 
 | Path | Purpose |
 | --- | --- |
-| `~/.config/kitty/global-pet-assistant/` | Watcher, plugin config, and local environment files. |
+| `~/.config/kitty/global-pet-assistant/` | Watcher, plugin config, shell integration, and local environment files. |
 | `~/.config/kitty/kitty.conf` | Receives one marked include block. |
+
+The plugin sends events to the local app only. It does not require tmux and does
+not open a public network listener.
 
 ## Uninstall
 
