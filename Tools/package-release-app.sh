@@ -73,12 +73,12 @@ PLIST
 
 codesign --force --deep --sign - "$APP_PATH"
 ditto -c -k --norsrc --keepParent "$APP_PATH" "$ZIP_PATH"
-shasum -a 256 "$ZIP_PATH" > "$CHECKSUM_PATH"
+(cd "$(dirname "$ZIP_PATH")" && shasum -a 256 "$(basename "$ZIP_PATH")" > "$(basename "$CHECKSUM_PATH")")
 mkdir -p "$DMG_STAGING_DIR"
 ditto "$APP_PATH" "$DMG_STAGING_DIR/GlobalPetAssistant.app"
 ln -s /Applications "$DMG_STAGING_DIR/Applications"
 hdiutil create -volname "Global Pet Assistant" -srcfolder "$DMG_STAGING_DIR" -ov -format UDZO "$DMG_PATH"
-shasum -a 256 "$DMG_PATH" > "$DMG_CHECKSUM_PATH"
+(cd "$(dirname "$DMG_PATH")" && shasum -a 256 "$(basename "$DMG_PATH")" > "$(basename "$DMG_CHECKSUM_PATH")")
 
 echo "$APP_PATH"
 echo "$ZIP_PATH"
