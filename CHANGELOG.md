@@ -7,6 +7,12 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.9 - 2026-05-14
+
+- Mitigated pet resize slider drift by isolating resize interactions from pet dragging and anchoring the resize control during scale changes.
+- Hid the compact status bar and expanded thread panel while resizing so they do not overlap the resize control.
+- Fixed compact status bar and expanded thread panel clipping when the selected pet is scaled down.
+
 ## 0.4.8 - 2026-05-13
 
 - Made flash and focus-timer side messages follow the pet's vertical screen placement instead of staying fixed to the pet's top edge.

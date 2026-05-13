@@ -152,6 +152,40 @@ final class FloatingPetWindow: NSPanel {
         petContentView.setPetResizeControlVisible(true)
     }
 
+    func hidePetResizeControl() {
+        petContentView.setPetResizeControlVisible(false)
+    }
+
+    #if DEBUG
+    var petScreenFrameForTesting: NSRect? {
+        petContentView.petScreenFrameForTesting
+    }
+
+    var scaleControlScreenFrameForTesting: NSRect? {
+        petContentView.scaleControlScreenFrameForTesting
+    }
+
+    var threadBadgeScreenFrameForTesting: NSRect? {
+        petContentView.threadBadgeScreenFrameForTesting
+    }
+
+    var threadPanelScreenFrameForTesting: NSRect? {
+        petContentView.threadPanelScreenFrameForTesting
+    }
+
+    var isThreadBadgeHiddenForTesting: Bool {
+        petContentView.isThreadBadgeHiddenForTesting
+    }
+
+    var isThreadPanelHiddenForTesting: Bool {
+        petContentView.isThreadPanelHiddenForTesting
+    }
+
+    func expandThreadPanelForTesting() {
+        petContentView.expandThreadPanelForTesting()
+    }
+    #endif
+
     private func fitToContentPreservingTopRight() {
         let desiredSize = petContentView.desiredContentSize
         guard frame.size != desiredSize else {
@@ -254,10 +288,13 @@ final class PetWindowContentView: NSView {
         case trailing
     }
 
-    private struct PetResizeAnchor {
-        let horizontalPlacement: HorizontalPlacement
-        let edgeX: CGFloat
-        let midY: CGFloat
+    private enum ResizeAnchor {
+        case petCenter(NSPoint)
+        case scaleControlCenter(NSPoint)
+    }
+
+    private struct PetCenterAnchor {
+        let center: NSPoint
     }
 
     private enum ThreadPanelVerticalPlacement {
@@ -317,7 +354,7 @@ final class PetWindowContentView: NSView {
         let primaryHeight = max(petSize.height, resizeControlHeight) + sideStackVerticalSpace
         let badgeHeight = isThreadBadgeVisible ? Self.threadStatusBarGap + Self.threadStatusBarHeight : 0
 
-        guard isThreadPanelExpanded else {
+        guard isThreadPanelVisible else {
             return NSSize(width: primaryWidth, height: primaryHeight + badgeHeight)
         }
 
@@ -350,6 +387,7 @@ final class PetWindowContentView: NSView {
     private var threadBadgeTopConstraint: NSLayoutConstraint?
     private var threadBadgeBelowPetConstraint: NSLayoutConstraint?
     private var threadBadgeBelowThreadPanelConstraint: NSLayoutConstraint?
+    private var threadBadgeCenterXConstraint: NSLayoutConstraint?
     private var threadBadgeLeadingConstraint: NSLayoutConstraint?
     private var threadBadgeTrailingConstraint: NSLayoutConstraint?
     private var petWidthConstraint: NSLayoutConstraint?
@@ -437,6 +475,7 @@ final class PetWindowContentView: NSView {
             equalTo: threadPanelView.bottomAnchor,
             constant: Self.threadStatusBarGap
         )
+        let threadBadgeCenterXConstraint = threadBadgeButton.centerXAnchor.constraint(equalTo: petView.centerXAnchor)
         let threadBadgeLeadingConstraint = threadBadgeButton.leadingAnchor.constraint(equalTo: petView.leadingAnchor)
         let threadBadgeTrailingConstraint = threadBadgeButton.trailingAnchor.constraint(equalTo: petView.trailingAnchor)
         let scaleControlLeadingConstraint = petScaleControlContainer.leadingAnchor.constraint(
@@ -501,6 +540,7 @@ final class PetWindowContentView: NSView {
         self.threadBadgeTopConstraint = threadBadgeTopConstraint
         self.threadBadgeBelowPetConstraint = threadBadgeBelowPetConstraint
         self.threadBadgeBelowThreadPanelConstraint = threadBadgeBelowThreadPanelConstraint
+        self.threadBadgeCenterXConstraint = threadBadgeCenterXConstraint
         self.threadBadgeLeadingConstraint = threadBadgeLeadingConstraint
         self.threadBadgeTrailingConstraint = threadBadgeTrailingConstraint
         self.scaleControlLeadingConstraint = scaleControlLeadingConstraint
@@ -581,6 +621,11 @@ final class PetWindowContentView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let localPoint = convert(event.locationInWindow, from: nil)
+        if isPetResizeControlVisible, petView.frame.contains(localPoint) {
+            resetMouseTracking()
+            return
+        }
+
         didMouseDownOnPet = petView.frame.contains(localPoint)
         mouseDownScreenPoint = window?.convertPoint(toScreen: event.locationInWindow)
         mouseDownWindowOrigin = window?.frame.origin
@@ -589,6 +634,11 @@ final class PetWindowContentView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard !isPetResizeControlVisible else {
+            resetMouseTracking()
+            return
+        }
+
         guard didMouseDownOnPet else {
             return
         }
@@ -637,6 +687,11 @@ final class PetWindowContentView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        guard !isPetResizeControlVisible else {
+            resetMouseTracking()
+            return
+        }
+
         guard let window else {
             resetMouseTracking()
             return
@@ -691,7 +746,7 @@ final class PetWindowContentView: NSView {
 
     private func applyUserInterfacePreferences(_ preferences: UserInterfacePreferences, display: Bool) {
         let preferences = preferences.clamped()
-        let previousPetAnchor = petResizeAnchor()
+        let previousAnchor = resizeAnchor()
         let previousSize = desiredContentSize
         userInterfacePreferences = preferences
         petScaleControl.scale = preferences.petScale
@@ -706,8 +761,8 @@ final class PetWindowContentView: NSView {
             onDesiredSizeChanged?()
         }
 
-        if let previousPetAnchor {
-            placePet(at: previousPetAnchor, display: display)
+        if let previousAnchor {
+            placeContent(at: previousAnchor, display: display)
         }
     }
 
@@ -716,12 +771,13 @@ final class PetWindowContentView: NSView {
             return
         }
 
-        let previousPetAnchor = petResizeAnchor()
+        let previousPetAnchor = petCenterAnchor()
         let previousSize = desiredContentSize
         isPetResizeControlVisible = isVisible
         petScaleControlContainer.isHidden = !isVisible
         updateFloatingSurfacePlacement()
         applyFloatingSurfacePlacement()
+        applyThreadPanelVisibility()
 
         let nextSize = desiredContentSize
         if previousSize != nextSize {
@@ -946,6 +1002,14 @@ final class PetWindowContentView: NSView {
     private func applyFlashVisibilityAndPlacement() {
         let hasMessages = hasSideStack
         flashStackView.isHidden = !hasMessages
+        let petSize = petView.intrinsicContentSize
+        let lowerSurfaceWidth = max(
+            isThreadBadgeVisible ? Self.threadStatusBarWidth : 0,
+            isThreadPanelVisible ? Self.threadPanelMaxWidth : 0
+        )
+        let lowerSurfaceInset = isThreadPanelVisible
+            ? 0
+            : max(0, (lowerSurfaceWidth - petSize.width) / 2)
 
         petLeadingConstraint?.isActive = false
         petTrailingConstraint?.isActive = false
@@ -957,6 +1021,7 @@ final class PetWindowContentView: NSView {
         flashTrailingFromScaleControlConstraint?.isActive = false
 
         if horizontalPlacement == .leading {
+            petLeadingConstraint?.constant = lowerSurfaceInset
             petLeadingConstraint?.isActive = true
             scaleControlLeadingConstraint?.isActive = true
             if hasMessages {
@@ -967,6 +1032,7 @@ final class PetWindowContentView: NSView {
                 }
             }
         } else {
+            petTrailingConstraint?.constant = -lowerSurfaceInset
             petTrailingConstraint?.isActive = true
             scaleControlTrailingConstraint?.isActive = true
             if hasMessages {
@@ -991,6 +1057,7 @@ final class PetWindowContentView: NSView {
         threadBadgeTopConstraint?.isActive = false
         threadBadgeBelowPetConstraint?.isActive = false
         threadBadgeBelowThreadPanelConstraint?.isActive = false
+        threadBadgeCenterXConstraint?.isActive = false
         threadBadgeLeadingConstraint?.isActive = false
         threadBadgeTrailingConstraint?.isActive = false
         flashTopConstraint?.isActive = false
@@ -1060,11 +1127,23 @@ final class PetWindowContentView: NSView {
 
         switch horizontalPlacement {
         case .leading:
-            threadPanelLeadingConstraint?.isActive = true
-            threadBadgeLeadingConstraint?.isActive = true
+            if hasPanel {
+                threadPanelLeadingConstraint?.isActive = true
+            }
+            if hasPanel && hasBadge {
+                threadBadgeLeadingConstraint?.isActive = true
+            }
         case .trailing:
-            threadPanelTrailingConstraint?.isActive = true
-            threadBadgeTrailingConstraint?.isActive = true
+            if hasPanel {
+                threadPanelTrailingConstraint?.isActive = true
+            }
+            if hasPanel && hasBadge {
+                threadBadgeTrailingConstraint?.isActive = true
+            }
+        }
+
+        if hasBadge && !hasPanel {
+            threadBadgeCenterXConstraint?.isActive = true
         }
     }
 
@@ -1099,25 +1178,38 @@ final class PetWindowContentView: NSView {
         )
     }
 
-    private func petResizeAnchor() -> PetResizeAnchor? {
+    private func resizeAnchor() -> ResizeAnchor? {
+        if isPetResizeControlVisible, let scaleControlFrame = scaleControlScreenFrame() {
+            return .scaleControlCenter(scaleControlFrame.center)
+        }
+
+        guard let petAnchor = petCenterAnchor() else {
+            return nil
+        }
+        return .petCenter(petAnchor.center)
+    }
+
+    private func petCenterAnchor() -> PetCenterAnchor? {
         guard let petFrame = petScreenFrame() else {
             return nil
         }
 
-        switch horizontalPlacement {
-        case .leading:
-            return PetResizeAnchor(
-                horizontalPlacement: .leading,
-                edgeX: petFrame.minX,
-                midY: petFrame.midY
-            )
-        case .trailing:
-            return PetResizeAnchor(
-                horizontalPlacement: .trailing,
-                edgeX: petFrame.maxX,
-                midY: petFrame.midY
-            )
+        return PetCenterAnchor(center: petFrame.center)
+    }
+
+    private func scaleControlScreenFrame() -> NSRect? {
+        guard let window else {
+            return nil
         }
+
+        layoutSubtreeIfNeeded()
+        let controlFrameInWindow = convert(petScaleControlContainer.frame, to: nil)
+        return NSRect(
+            x: window.frame.minX + controlFrameInWindow.minX,
+            y: window.frame.minY + controlFrameInWindow.minY,
+            width: controlFrameInWindow.width,
+            height: controlFrameInWindow.height
+        )
     }
 
     private func placePet(at screenOrigin: NSPoint, display: Bool) {
@@ -1136,28 +1228,113 @@ final class PetWindowContentView: NSView {
         window.setFrame(FloatingPetWindow.constrainedFrame(nextFrame), display: display)
     }
 
-    private func placePet(at anchor: PetResizeAnchor, display: Bool) {
+    private func placePet(at anchor: PetCenterAnchor, display: Bool) {
         guard let window else {
             return
         }
 
         layoutSubtreeIfNeeded()
         let petFrameInWindow = convert(petView.frame, to: nil)
-        let nextOriginX: CGFloat
-        switch anchor.horizontalPlacement {
-        case .leading:
-            nextOriginX = anchor.edgeX - petFrameInWindow.minX
-        case .trailing:
-            nextOriginX = anchor.edgeX - petFrameInWindow.maxX
-        }
         let nextFrame = NSRect(
-            x: nextOriginX,
-            y: anchor.midY - petFrameInWindow.midY,
+            x: anchor.center.x - petFrameInWindow.midX,
+            y: anchor.center.y - petFrameInWindow.midY,
             width: window.frame.width,
             height: window.frame.height
         )
         window.setFrame(FloatingPetWindow.constrainedFrame(nextFrame), display: display)
     }
+
+    private func placeContent(at anchor: ResizeAnchor, display: Bool) {
+        switch anchor {
+        case .petCenter(let center):
+            placePet(at: PetCenterAnchor(center: center), display: display)
+        case .scaleControlCenter(let center):
+            placeScaleControl(centeredAt: center, display: display)
+        }
+    }
+
+    private func placeScaleControl(centeredAt screenCenter: NSPoint, display: Bool) {
+        guard let window else {
+            return
+        }
+
+        layoutSubtreeIfNeeded()
+        let controlFrameInWindow = convert(petScaleControlContainer.frame, to: nil)
+        let nextFrame = NSRect(
+            x: screenCenter.x - controlFrameInWindow.midX,
+            y: screenCenter.y - controlFrameInWindow.midY,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        window.setFrame(nextFrame, display: display)
+    }
+
+    #if DEBUG
+    var petScreenFrameForTesting: NSRect? {
+        petScreenFrame()
+    }
+
+    var scaleControlScreenFrameForTesting: NSRect? {
+        scaleControlScreenFrame()
+    }
+
+    var threadBadgeScreenFrameForTesting: NSRect? {
+        guard let window else {
+            return nil
+        }
+
+        layoutSubtreeIfNeeded()
+        let badgeFrameInWindow = convert(threadBadgeButton.frame, to: nil)
+        return NSRect(
+            x: window.frame.minX + badgeFrameInWindow.minX,
+            y: window.frame.minY + badgeFrameInWindow.minY,
+            width: badgeFrameInWindow.width,
+            height: badgeFrameInWindow.height
+        )
+    }
+
+    var threadPanelScreenFrameForTesting: NSRect? {
+        guard let window else {
+            return nil
+        }
+
+        layoutSubtreeIfNeeded()
+        let panelFrameInWindow = convert(threadPanelView.frame, to: nil)
+        return NSRect(
+            x: window.frame.minX + panelFrameInWindow.minX,
+            y: window.frame.minY + panelFrameInWindow.minY,
+            width: panelFrameInWindow.width,
+            height: panelFrameInWindow.height
+        )
+    }
+
+    var isThreadBadgeHiddenForTesting: Bool {
+        threadBadgeButton.isHidden
+    }
+
+    var isThreadPanelHiddenForTesting: Bool {
+        threadPanelView.isHidden
+    }
+
+    func expandThreadPanelForTesting() {
+        guard threadSnapshot?.activeCount ?? 0 > 0 else {
+            return
+        }
+
+        let previousSize = desiredContentSize
+        isThreadPanelExpanded = true
+        updateThreadBadge()
+        updateThreadPanelHeight()
+        applyThreadPanelVisibility()
+        applyFloatingSurfacePlacement(preservingPetPosition: true)
+
+        let nextSize = desiredContentSize
+        if previousSize != nextSize {
+            frame.size = nextSize
+            onDesiredSizeChanged?()
+        }
+    }
+    #endif
 
     private func updateThreadBadge() {
         let summary = threadSnapshot?.statusSummary ?? .empty
@@ -1196,15 +1373,16 @@ final class PetWindowContentView: NSView {
     }
 
     private func applyThreadPanelVisibility() {
+        threadBadgeButton.isHidden = !isThreadBadgeVisible
         threadPanelView.isHidden = !isThreadPanelVisible
     }
 
     private var isThreadPanelVisible: Bool {
-        isThreadPanelExpanded && (threadSnapshot?.activeCount ?? 0) > 0
+        !isPetResizeControlVisible && isThreadPanelExpanded && (threadSnapshot?.activeCount ?? 0) > 0
     }
 
     private var isThreadBadgeVisible: Bool {
-        (threadSnapshot?.activeCount ?? 0) > 0
+        !isPetResizeControlVisible && (threadSnapshot?.activeCount ?? 0) > 0
     }
 
     private var currentThreadPanelHeight: CGFloat {
@@ -1265,6 +1443,10 @@ private final class PetScaleControlView: NSView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+
+    override var mouseDownCanMoveWindow: Bool {
+        false
     }
 
     override func mouseDown(with event: NSEvent) {
