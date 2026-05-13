@@ -7,6 +7,10 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.7 - 2026-05-13
+
+- Centered the compact thread status counts independently from the expanded-state chevron.
+
 ## 0.4.6 - 2026-05-13
 
 - Fixed compact thread status bar clipping when the selected pet is narrower than the status bar.

@@ -272,7 +272,7 @@ final class PetWindowContentView: NSView {
     private static let threadStackSpacing: CGFloat = 5
     private static let threadPanelGap: CGFloat = 6
     private static let threadStatusBarGap: CGFloat = 6
-    private static let threadStatusBarWidth: CGFloat = 108
+    private static let threadStatusBarWidth: CGFloat = 124
     private static let threadStatusBarHeight: CGFloat = 30
     private static let flashStackWidth: CGFloat = 220
     private static let flashRowHeight: CGFloat = 34
@@ -1603,8 +1603,9 @@ private final class ThreadBadgeEffectButton: NSView {
         stackView.addArrangedSubview(failedSegment)
         stackView.addArrangedSubview(runningSegment)
         stackView.addArrangedSubview(successSegment)
-        stackView.addArrangedSubview(chevronView)
 
+        contentView.addSubview(chevronView)
+        chevronView.translatesAutoresizingMaskIntoConstraints = false
         chevronView.image = NSImage(
             systemSymbolName: "chevron.down",
             accessibilityDescription: "Hide thread details"
@@ -1627,6 +1628,8 @@ private final class ThreadBadgeEffectButton: NSView {
             stackView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             stackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
+            chevronView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            chevronView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             chevronView.widthAnchor.constraint(equalToConstant: Self.chevronSize),
             chevronView.heightAnchor.constraint(equalToConstant: Self.chevronSize)
         ])
