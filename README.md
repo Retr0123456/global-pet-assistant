@@ -47,31 +47,22 @@ webhook listener by default. Your tools talk to a local server on
 
 Download the latest DMG from
 [GitHub Releases](https://github.com/Retr0123456/global-pet-assistant/releases/latest),
-open it, and drag `GlobalPetAssistant.app` into `/Applications`.
+open it, and drag `GlobalPetAssistant.app` into `/Applications`. Launch the app
+once, then run the bundled setup guide:
 
 ```bash
 open /Applications/GlobalPetAssistant.app
-curl -fsS http://127.0.0.1:17321/healthz
-```
-
-The current beta is not notarized yet. If macOS blocks first launch, open the
-app from Finder with Control-click -> Open, or allow it from System Settings.
-
-## Quick Start
-
-Run the bundled setup guide after launching the app:
-
-```bash
 /Applications/GlobalPetAssistant.app/Contents/Resources/Tools/setup-integrations.sh
 ```
 
-Dragging the DMG into `/Applications` does not modify terminal or coding-agent
-configuration. The setup guide shows the exact external files it may modify,
-backs up existing files, and lets you choose integrations such as Kitty command
-flashes and Codex session reminders. `petctl` is bundled inside the app; global
-registration is optional.
+The DMG install only copies the app. The setup guide shows every external config
+file it may modify, creates backups, and lets you choose integrations such as
+Kitty command flashes and Codex session reminders.
 
-See the full guide in [Integration Setup](docs/integrations.md).
+The current beta is not notarized yet. If macOS blocks first launch, open the
+app from Finder with Control-click -> Open, or allow it from System Settings.
+See [Integration Setup](docs/integrations.md) for manual and non-interactive
+commands.
 
 ## How It Works
 
@@ -162,7 +153,8 @@ rm -rf ~/.global-pet-assistant
 
 If you installed integrations, also remove their managed config:
 
-- Kitty: remove `~/.config/kitty/global-pet-assistant` and the marked include
-  block in `~/.config/kitty/kitty.conf`.
-- Codex hooks: remove managed commands containing
-  `global-pet-agent-bridge --source codex` from `~/.codex/hooks.json`.
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl uninstall kitty,codex
+```
+
+See [Integration Setup](docs/integrations.md) for per-module cleanup.

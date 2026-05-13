@@ -44,29 +44,21 @@ Global Pet Assistant 是给本地开发工作流用的原生 AppKit 小工具。
 ## 安装
 
 从 [GitHub Releases](https://github.com/Retr0123456/global-pet-assistant/releases/latest)
-下载最新 DMG，打开后把 `GlobalPetAssistant.app` 拖到 `/Applications`。
+下载最新 DMG，打开后把 `GlobalPetAssistant.app` 拖到 `/Applications`。先启动一次
+应用，然后运行内置配置向导：
 
 ```bash
 open /Applications/GlobalPetAssistant.app
-curl -fsS http://127.0.0.1:17321/healthz
-```
-
-当前 beta 版本还没有 notarize。如果 macOS 阻止首次启动，可以在 Finder 中
-Control-click -> Open，或在 System Settings 中允许打开。
-
-## 快速开始
-
-启动应用后运行内置的交互式配置向导：
-
-```bash
 /Applications/GlobalPetAssistant.app/Contents/Resources/Tools/setup-integrations.sh
 ```
 
-把 DMG 拖到 `/Applications` 不会自动修改终端或 coding agent 配置。配置向导会先
-显示将要修改的外部文件，备份已有文件，然后让你选择 Kitty 命令反馈、Codex 会话
-提醒等集成。`petctl` 已经内置在 app 里，全局注册是可选项。
+DMG 安装只会复制 app，不会自动修改终端或 coding agent 配置。配置向导会先显示
+将要修改的外部文件，创建备份，然后让你选择 Kitty 命令反馈、Codex 会话提醒等
+集成。
 
-完整说明见 [集成配置](docs/integrations.zh-CN.md)。
+当前 beta 版本还没有 notarize。如果 macOS 阻止首次启动，可以在 Finder 中
+Control-click -> Open，或在 System Settings 中允许打开。手动安装和非交互命令见
+[集成配置](docs/integrations.zh-CN.md)。
 
 ## 工作方式
 
@@ -150,7 +142,8 @@ rm -rf ~/.global-pet-assistant
 
 如果安装过集成，也清理它们的托管配置：
 
-- Kitty：删除 `~/.config/kitty/global-pet-assistant`，并从
-  `~/.config/kitty/kitty.conf` 删除带标记的 include block。
-- Codex hooks：从 `~/.codex/hooks.json` 删除包含
-  `global-pet-agent-bridge --source codex` 的托管命令。
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl uninstall kitty,codex
+```
+
+单个模块的清理方式见 [集成配置](docs/integrations.zh-CN.md)。
