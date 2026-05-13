@@ -44,49 +44,21 @@ Global Pet Assistant 是给本地开发工作流用的原生 AppKit 小工具。
 ## 安装
 
 从 [GitHub Releases](https://github.com/Retr0123456/global-pet-assistant/releases/latest)
-下载最新 DMG，打开后把 `GlobalPetAssistant.app` 拖到 `/Applications`。
+下载最新 DMG，打开后把 `GlobalPetAssistant.app` 拖到 `/Applications`。先启动一次
+应用，然后运行内置配置向导：
 
 ```bash
 open /Applications/GlobalPetAssistant.app
-curl -fsS http://127.0.0.1:17321/healthz
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/setup-integrations.sh
 ```
+
+DMG 安装只会复制 app，不会自动修改终端或 coding agent 配置。配置向导会先显示
+将要修改的外部文件，创建备份，然后让你选择 Kitty 命令反馈、Codex 会话提醒等
+集成。
 
 当前 beta 版本还没有 notarize。如果 macOS 阻止首次启动，可以在 Finder 中
-Control-click -> Open，或在 System Settings 中允许打开。
-
-## 快速开始
-
-先选择一个集成。之后也可以两个都安装。
-
-### Kitty 命令反馈
-
-如果你主要使用 kitty，并且想看到命令开始/结束反馈，选这个。
-
-```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
-```
-
-完全退出并重新打开 kitty，然后运行：
-
-```zsh
-sleep 3
-false
-```
-
-`sleep 3` 应该显示短暂 success flash，`false` 应该显示短暂 failure flash。
-
-### Codex 会话提醒
-
-如果你想让宠物跟踪 Codex 生命周期事件，选这个。
-
-```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
-```
-
-安装后重启 Codex session。新的 prompt 会把会话标记为 running，需要批准时会显示
-waiting，turn 完成后会进入 thread panel，直到手动关闭。
-
-完整说明见 [集成配置](docs/integrations.zh-CN.md)。
+Control-click -> Open，或在 System Settings 中允许打开。手动安装和非交互命令见
+[集成配置](docs/integrations.zh-CN.md)。
 
 ## 工作方式
 
@@ -170,7 +142,8 @@ rm -rf ~/.global-pet-assistant
 
 如果安装过集成，也清理它们的托管配置：
 
-- Kitty：删除 `~/.config/kitty/global-pet-assistant`，并从
-  `~/.config/kitty/kitty.conf` 删除带标记的 include block。
-- Codex hooks：从 `~/.codex/hooks.json` 删除包含
-  `global-pet-agent-bridge --source codex` 的托管命令。
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl uninstall kitty,codex
+```
+
+单个模块的清理方式见 [集成配置](docs/integrations.zh-CN.md)。

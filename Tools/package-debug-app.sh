@@ -24,10 +24,11 @@ mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources/bin" "$APP_PAT
 cp "$EXECUTABLE" "$APP_PATH/Contents/MacOS/GlobalPetAssistant"
 cp "$PETCTL_EXECUTABLE" "$APP_PATH/Contents/Resources/bin/petctl"
 cp "$AGENT_BRIDGE_EXECUTABLE" "$APP_PATH/Contents/Resources/bin/global-pet-agent-bridge"
+cp "$ROOT_DIR/Tools/setup-integrations.sh" "$APP_PATH/Contents/Resources/Tools/setup-integrations.sh"
 cp "$ROOT_DIR/Tools/install-codex-hooks.sh" "$APP_PATH/Contents/Resources/Tools/install-codex-hooks.sh"
 cp "$ROOT_DIR/Tools/verify-kitty-plugin.sh" "$APP_PATH/Contents/Resources/Tools/verify-kitty-plugin.sh"
 mkdir -p "$APP_PATH/Contents/Resources/plugins"
-cp -R "$ROOT_DIR/plugins/kitty" "$APP_PATH/Contents/Resources/plugins/kitty"
+cp -R "$ROOT_DIR/plugins/." "$APP_PATH/Contents/Resources/plugins/"
 
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
   cp -R "$RESOURCE_BUNDLE" "$APP_PATH/Contents/Resources/GlobalPetAssistant_GlobalPetAssistant.bundle"

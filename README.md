@@ -47,51 +47,22 @@ webhook listener by default. Your tools talk to a local server on
 
 Download the latest DMG from
 [GitHub Releases](https://github.com/Retr0123456/global-pet-assistant/releases/latest),
-open it, and drag `GlobalPetAssistant.app` into `/Applications`.
+open it, and drag `GlobalPetAssistant.app` into `/Applications`. Launch the app
+once, then run the bundled setup guide:
 
 ```bash
 open /Applications/GlobalPetAssistant.app
-curl -fsS http://127.0.0.1:17321/healthz
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/setup-integrations.sh
 ```
+
+The DMG install only copies the app. The setup guide shows every external config
+file it may modify, creates backups, and lets you choose integrations such as
+Kitty command flashes and Codex session reminders.
 
 The current beta is not notarized yet. If macOS blocks first launch, open the
 app from Finder with Control-click -> Open, or allow it from System Settings.
-
-## Quick Start
-
-Choose one integration first. You can install both later.
-
-### Kitty Command Flashes
-
-Use this if kitty is your main terminal and you want command start/end feedback.
-
-```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
-```
-
-Fully quit and reopen kitty, then run:
-
-```zsh
-sleep 3
-false
-```
-
-`sleep 3` should show a short success flash. `false` should show a short failure
-flash.
-
-### Codex Session Reminders
-
-Use this if you want the pet to track Codex lifecycle events.
-
-```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
-```
-
-Restart Codex sessions after installing. New prompts should mark the session as
-running, approval-needed states should show as waiting, and completed turns
-should appear in the thread panel until dismissed.
-
-See the full guide in [Integration Setup](docs/integrations.md).
+See [Integration Setup](docs/integrations.md) for manual and non-interactive
+commands.
 
 ## How It Works
 
@@ -182,7 +153,8 @@ rm -rf ~/.global-pet-assistant
 
 If you installed integrations, also remove their managed config:
 
-- Kitty: remove `~/.config/kitty/global-pet-assistant` and the marked include
-  block in `~/.config/kitty/kitty.conf`.
-- Codex hooks: remove managed commands containing
-  `global-pet-agent-bridge --source codex` from `~/.codex/hooks.json`.
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl uninstall kitty,codex
+```
+
+See [Integration Setup](docs/integrations.md) for per-module cleanup.
