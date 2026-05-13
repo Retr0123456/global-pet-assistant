@@ -7,6 +7,12 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.4 - 2026-05-13
+
+- Moved the compact thread status bar out of the pet sprite area so it follows the pet's screen quadrant without covering the pet.
+- Kept the pet resize close button visible when the pet is scaled down.
+- Increased thread panel and status bar contrast on bright desktop backgrounds.
+
 ## 0.4.3 - 2026-05-13
 
 - Added aggregate thread-state selection so visible failed rows beat success rows, success rows beat running or waiting rows, and idle only plays when no tracked rows remain.

@@ -271,6 +271,7 @@ final class PetWindowContentView: NSView {
     private static let threadPanelVerticalInset: CGFloat = 0
     private static let threadStackSpacing: CGFloat = 5
     private static let threadPanelGap: CGFloat = 6
+    private static let threadStatusBarGap: CGFloat = 6
     private static let threadStatusBarWidth: CGFloat = 108
     private static let threadStatusBarHeight: CGFloat = 30
     private static let flashStackWidth: CGFloat = 220
@@ -312,14 +313,15 @@ final class PetWindowContentView: NSView {
         let primaryWidth = petSize.width + scaleControlSideWidth + flashSideWidth
         let resizeControlHeight = isPetResizeControlVisible ? Self.scaleControlHeight : 0
         let primaryHeight = max(petSize.height, resizeControlHeight, flashStackHeight + Self.flashTopOffset)
+        let badgeHeight = isThreadBadgeVisible ? Self.threadStatusBarGap + Self.threadStatusBarHeight : 0
 
         guard isThreadPanelExpanded else {
-            return NSSize(width: primaryWidth, height: primaryHeight)
+            return NSSize(width: primaryWidth, height: primaryHeight + badgeHeight)
         }
 
         return NSSize(
             width: max(primaryWidth, Self.threadPanelMaxWidth),
-            height: primaryHeight + Self.threadPanelGap + currentThreadPanelHeight
+            height: primaryHeight + badgeHeight + Self.threadPanelGap + currentThreadPanelHeight
         )
     }
 
@@ -335,12 +337,19 @@ final class PetWindowContentView: NSView {
     private var threadPanelHeightConstraint: NSLayoutConstraint?
     private var petTopConstraint: NSLayoutConstraint?
     private var petBelowThreadPanelConstraint: NSLayoutConstraint?
+    private var petBelowThreadBadgeConstraint: NSLayoutConstraint?
     private var petLeadingConstraint: NSLayoutConstraint?
     private var petTrailingConstraint: NSLayoutConstraint?
     private var threadPanelTopConstraint: NSLayoutConstraint?
     private var threadPanelBelowPetConstraint: NSLayoutConstraint?
+    private var threadPanelBelowThreadBadgeConstraint: NSLayoutConstraint?
     private var threadPanelLeadingConstraint: NSLayoutConstraint?
     private var threadPanelTrailingConstraint: NSLayoutConstraint?
+    private var threadBadgeTopConstraint: NSLayoutConstraint?
+    private var threadBadgeBelowPetConstraint: NSLayoutConstraint?
+    private var threadBadgeBelowThreadPanelConstraint: NSLayoutConstraint?
+    private var threadBadgeLeadingConstraint: NSLayoutConstraint?
+    private var threadBadgeTrailingConstraint: NSLayoutConstraint?
     private var petWidthConstraint: NSLayoutConstraint?
     private var petHeightConstraint: NSLayoutConstraint?
     private var threadPanelWidthConstraint: NSLayoutConstraint?
@@ -393,6 +402,10 @@ final class PetWindowContentView: NSView {
             equalTo: threadPanelView.bottomAnchor,
             constant: Self.threadPanelGap
         )
+        let petBelowThreadBadgeConstraint = petView.topAnchor.constraint(
+            equalTo: threadBadgeButton.bottomAnchor,
+            constant: Self.threadStatusBarGap
+        )
         let petLeadingConstraint = petView.leadingAnchor.constraint(equalTo: leadingAnchor)
         let petTrailingConstraint = petView.trailingAnchor.constraint(equalTo: trailingAnchor)
         let threadPanelTopConstraint = threadPanelView.topAnchor.constraint(equalTo: topAnchor)
@@ -400,8 +413,23 @@ final class PetWindowContentView: NSView {
             equalTo: petView.bottomAnchor,
             constant: Self.threadPanelGap
         )
+        let threadPanelBelowThreadBadgeConstraint = threadPanelView.topAnchor.constraint(
+            equalTo: threadBadgeButton.bottomAnchor,
+            constant: Self.threadPanelGap
+        )
         let threadPanelLeadingConstraint = threadPanelView.leadingAnchor.constraint(equalTo: petView.leadingAnchor)
         let threadPanelTrailingConstraint = threadPanelView.trailingAnchor.constraint(equalTo: petView.trailingAnchor)
+        let threadBadgeTopConstraint = threadBadgeButton.topAnchor.constraint(equalTo: topAnchor)
+        let threadBadgeBelowPetConstraint = threadBadgeButton.topAnchor.constraint(
+            equalTo: petView.bottomAnchor,
+            constant: Self.threadStatusBarGap
+        )
+        let threadBadgeBelowThreadPanelConstraint = threadBadgeButton.topAnchor.constraint(
+            equalTo: threadPanelView.bottomAnchor,
+            constant: Self.threadStatusBarGap
+        )
+        let threadBadgeLeadingConstraint = threadBadgeButton.leadingAnchor.constraint(equalTo: petView.leadingAnchor)
+        let threadBadgeTrailingConstraint = threadBadgeButton.trailingAnchor.constraint(equalTo: petView.trailingAnchor)
         let scaleControlLeadingConstraint = petScaleControlContainer.leadingAnchor.constraint(
             equalTo: petView.trailingAnchor,
             constant: Self.scaleControlGap
@@ -428,12 +456,19 @@ final class PetWindowContentView: NSView {
         )
         self.petTopConstraint = petTopConstraint
         self.petBelowThreadPanelConstraint = petBelowThreadPanelConstraint
+        self.petBelowThreadBadgeConstraint = petBelowThreadBadgeConstraint
         self.petLeadingConstraint = petLeadingConstraint
         self.petTrailingConstraint = petTrailingConstraint
         self.threadPanelTopConstraint = threadPanelTopConstraint
         self.threadPanelBelowPetConstraint = threadPanelBelowPetConstraint
+        self.threadPanelBelowThreadBadgeConstraint = threadPanelBelowThreadBadgeConstraint
         self.threadPanelLeadingConstraint = threadPanelLeadingConstraint
         self.threadPanelTrailingConstraint = threadPanelTrailingConstraint
+        self.threadBadgeTopConstraint = threadBadgeTopConstraint
+        self.threadBadgeBelowPetConstraint = threadBadgeBelowPetConstraint
+        self.threadBadgeBelowThreadPanelConstraint = threadBadgeBelowThreadPanelConstraint
+        self.threadBadgeLeadingConstraint = threadBadgeLeadingConstraint
+        self.threadBadgeTrailingConstraint = threadBadgeTrailingConstraint
         self.scaleControlLeadingConstraint = scaleControlLeadingConstraint
         self.scaleControlTrailingConstraint = scaleControlTrailingConstraint
         self.flashLeadingFromPetConstraint = flashLeadingFromPetConstraint
@@ -452,12 +487,10 @@ final class PetWindowContentView: NSView {
             petWidthConstraint,
             petHeightConstraint,
 
-            threadBadgeButton.topAnchor.constraint(equalTo: petView.topAnchor),
-            threadBadgeButton.trailingAnchor.constraint(equalTo: petView.trailingAnchor),
             threadBadgeButton.widthAnchor.constraint(equalToConstant: Self.threadStatusBarWidth),
             threadBadgeButton.heightAnchor.constraint(equalToConstant: Self.threadStatusBarHeight),
 
-            petScaleControlContainer.centerYAnchor.constraint(equalTo: petView.centerYAnchor),
+            petScaleControlContainer.topAnchor.constraint(equalTo: petView.topAnchor),
             petScaleControlContainer.widthAnchor.constraint(equalToConstant: Self.scaleControlWidth),
             petScaleControlContainer.heightAnchor.constraint(equalToConstant: Self.scaleControlHeight),
 
@@ -909,24 +942,55 @@ final class PetWindowContentView: NSView {
     private func applyThreadPanelPlacement() {
         petTopConstraint?.isActive = false
         petBelowThreadPanelConstraint?.isActive = false
+        petBelowThreadBadgeConstraint?.isActive = false
         threadPanelTopConstraint?.isActive = false
         threadPanelBelowPetConstraint?.isActive = false
+        threadPanelBelowThreadBadgeConstraint?.isActive = false
         threadPanelLeadingConstraint?.isActive = false
         threadPanelTrailingConstraint?.isActive = false
+        threadBadgeTopConstraint?.isActive = false
+        threadBadgeBelowPetConstraint?.isActive = false
+        threadBadgeBelowThreadPanelConstraint?.isActive = false
+        threadBadgeLeadingConstraint?.isActive = false
+        threadBadgeTrailingConstraint?.isActive = false
 
-        if isThreadPanelVisible, threadPanelVerticalPlacement == .abovePet {
-            threadPanelTopConstraint?.isActive = true
-            petBelowThreadPanelConstraint?.isActive = true
+        let hasBadge = isThreadBadgeVisible
+        let hasPanel = isThreadPanelVisible
+
+        if threadPanelVerticalPlacement == .abovePet {
+            if hasPanel {
+                threadPanelTopConstraint?.isActive = true
+                if hasBadge {
+                    threadBadgeBelowThreadPanelConstraint?.isActive = true
+                    petBelowThreadBadgeConstraint?.isActive = true
+                } else {
+                    petBelowThreadPanelConstraint?.isActive = true
+                }
+            } else if hasBadge {
+                threadBadgeTopConstraint?.isActive = true
+                petBelowThreadBadgeConstraint?.isActive = true
+            } else {
+                petTopConstraint?.isActive = true
+            }
         } else {
             petTopConstraint?.isActive = true
-            threadPanelBelowPetConstraint?.isActive = true
+            if hasBadge {
+                threadBadgeBelowPetConstraint?.isActive = true
+                if hasPanel {
+                    threadPanelBelowThreadBadgeConstraint?.isActive = true
+                }
+            } else if hasPanel {
+                threadPanelBelowPetConstraint?.isActive = true
+            }
         }
 
         switch horizontalPlacement {
         case .leading:
             threadPanelLeadingConstraint?.isActive = true
+            threadBadgeLeadingConstraint?.isActive = true
         case .trailing:
             threadPanelTrailingConstraint?.isActive = true
+            threadBadgeTrailingConstraint?.isActive = true
         }
     }
 
@@ -1063,6 +1127,10 @@ final class PetWindowContentView: NSView {
 
     private var isThreadPanelVisible: Bool {
         isThreadPanelExpanded && (threadSnapshot?.activeCount ?? 0) > 0
+    }
+
+    private var isThreadBadgeVisible: Bool {
+        (threadSnapshot?.activeCount ?? 0) > 0
     }
 
     private var currentThreadPanelHeight: CGFloat {
@@ -1417,11 +1485,11 @@ private final class FlashMessageRowView: NSView {
 
 private enum ThreadVisualEffectStyle {
     @MainActor static func configureBadge(_ effectView: NSVisualEffectView, cornerRadius: CGFloat) {
-        configure(effectView, cornerRadius: cornerRadius, material: .menu, borderAlpha: 0.18)
+        configure(effectView, cornerRadius: cornerRadius, material: .hudWindow, borderAlpha: 0.26)
     }
 
     @MainActor static func configurePanelRow(_ effectView: NSVisualEffectView, cornerRadius: CGFloat) {
-        configure(effectView, cornerRadius: cornerRadius, material: .hudWindow, borderAlpha: 0.20)
+        configure(effectView, cornerRadius: cornerRadius, material: .hudWindow, borderAlpha: 0.28)
     }
 
     @MainActor static func configureReplyControl(_ effectView: NSVisualEffectView, cornerRadius: CGFloat) {
@@ -1442,7 +1510,7 @@ private enum ThreadVisualEffectStyle {
         effectView.layer?.cornerRadius = cornerRadius
         effectView.layer?.masksToBounds = true
         effectView.layer?.borderWidth = 1
-        effectView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(borderAlpha).cgColor
+        effectView.layer?.borderColor = NSColor.white.withAlphaComponent(borderAlpha).cgColor
     }
 }
 
@@ -1521,7 +1589,9 @@ private final class ThreadBadgeEffectButton: NSView {
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.68).cgColor
+        contentView.layer?.cornerRadius = Self.cornerRadius
+        contentView.layer?.masksToBounds = true
 
         contentView.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
@@ -1538,7 +1608,7 @@ private final class ThreadBadgeEffectButton: NSView {
             systemSymbolName: "chevron.down",
             accessibilityDescription: "Hide thread details"
         )
-        chevronView.contentTintColor = .labelColor
+        chevronView.contentTintColor = NSColor.white.withAlphaComponent(0.86)
         chevronView.imageScaling = .scaleProportionallyDown
         chevronView.isHidden = true
 
@@ -1597,7 +1667,7 @@ private final class ThreadStatusCountSegmentView: NSView {
         textField.translatesAutoresizingMaskIntoConstraints = false
         textField.alignment = .left
         textField.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        textField.textColor = .labelColor
+        textField.textColor = NSColor.white.withAlphaComponent(0.92)
         addSubview(textField)
 
         NSLayoutConstraint.activate([
@@ -1732,7 +1802,7 @@ private final class ThreadMessageRowView: NSView {
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.68).cgColor
         contentView.layer?.cornerRadius = Self.cornerRadius
         contentView.layer?.masksToBounds = true
 
@@ -2187,7 +2257,7 @@ private final class ThreadMessageTextView: NSView {
         paragraphStyle.lineBreakMode = .byTruncatingTail
         return [
             .font: NSFont.systemFont(ofSize: 12.5, weight: .semibold),
-            .foregroundColor: NSColor.labelColor,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.94),
             .paragraphStyle: paragraphStyle
         ]
     }
@@ -2198,7 +2268,7 @@ private final class ThreadMessageTextView: NSView {
         paragraphStyle.lineBreakMode = .byWordWrapping
         return [
             .font: NSFont.systemFont(ofSize: 11.5, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.78),
             .paragraphStyle: paragraphStyle
         ]
     }
