@@ -313,7 +313,8 @@ final class PetWindowContentView: NSView {
         let badgeWidth = isThreadBadgeVisible ? Self.threadStatusBarWidth : 0
         let primaryWidth = max(petSize.width, badgeWidth) + scaleControlSideWidth + flashSideWidth
         let resizeControlHeight = isPetResizeControlVisible ? Self.scaleControlHeight : 0
-        let primaryHeight = max(petSize.height, resizeControlHeight, flashStackHeight + Self.flashTopOffset)
+        let sideStackVerticalSpace = hasSideStack ? flashStackHeight + Self.flashPetGap : 0
+        let primaryHeight = max(petSize.height, resizeControlHeight) + sideStackVerticalSpace
         let badgeHeight = isThreadBadgeVisible ? Self.threadStatusBarGap + Self.threadStatusBarHeight : 0
 
         guard isThreadPanelExpanded else {
@@ -360,6 +361,13 @@ final class PetWindowContentView: NSView {
     private var flashLeadingFromScaleControlConstraint: NSLayoutConstraint?
     private var flashTrailingFromPetConstraint: NSLayoutConstraint?
     private var flashTrailingFromScaleControlConstraint: NSLayoutConstraint?
+    private var flashTopConstraint: NSLayoutConstraint?
+    private var flashBelowPetConstraint: NSLayoutConstraint?
+    private var flashBelowThreadPanelConstraint: NSLayoutConstraint?
+    private var flashBelowThreadBadgeConstraint: NSLayoutConstraint?
+    private var petBelowFlashConstraint: NSLayoutConstraint?
+    private var threadPanelBelowFlashConstraint: NSLayoutConstraint?
+    private var threadBadgeBelowFlashConstraint: NSLayoutConstraint?
     private var mouseDownScreenPoint: NSPoint?
     private var mouseDownWindowOrigin: NSPoint?
     private var mouseDownPetScreenOrigin: NSPoint?
@@ -455,6 +463,31 @@ final class PetWindowContentView: NSView {
             equalTo: petScaleControlContainer.leadingAnchor,
             constant: -Self.flashPetGap
         )
+        let flashTopConstraint = flashStackView.topAnchor.constraint(equalTo: topAnchor)
+        let flashBelowPetConstraint = flashStackView.topAnchor.constraint(
+            equalTo: petView.bottomAnchor,
+            constant: Self.flashPetGap
+        )
+        let flashBelowThreadPanelConstraint = flashStackView.topAnchor.constraint(
+            equalTo: threadPanelView.bottomAnchor,
+            constant: Self.flashPetGap
+        )
+        let flashBelowThreadBadgeConstraint = flashStackView.topAnchor.constraint(
+            equalTo: threadBadgeButton.bottomAnchor,
+            constant: Self.flashPetGap
+        )
+        let petBelowFlashConstraint = petView.topAnchor.constraint(
+            equalTo: flashStackView.bottomAnchor,
+            constant: Self.flashPetGap
+        )
+        let threadPanelBelowFlashConstraint = threadPanelView.topAnchor.constraint(
+            equalTo: flashStackView.bottomAnchor,
+            constant: Self.threadPanelGap
+        )
+        let threadBadgeBelowFlashConstraint = threadBadgeButton.topAnchor.constraint(
+            equalTo: flashStackView.bottomAnchor,
+            constant: Self.threadStatusBarGap
+        )
         self.petTopConstraint = petTopConstraint
         self.petBelowThreadPanelConstraint = petBelowThreadPanelConstraint
         self.petBelowThreadBadgeConstraint = petBelowThreadBadgeConstraint
@@ -476,6 +509,13 @@ final class PetWindowContentView: NSView {
         self.flashLeadingFromScaleControlConstraint = flashLeadingFromScaleControlConstraint
         self.flashTrailingFromPetConstraint = flashTrailingFromPetConstraint
         self.flashTrailingFromScaleControlConstraint = flashTrailingFromScaleControlConstraint
+        self.flashTopConstraint = flashTopConstraint
+        self.flashBelowPetConstraint = flashBelowPetConstraint
+        self.flashBelowThreadPanelConstraint = flashBelowThreadPanelConstraint
+        self.flashBelowThreadBadgeConstraint = flashBelowThreadBadgeConstraint
+        self.petBelowFlashConstraint = petBelowFlashConstraint
+        self.threadPanelBelowFlashConstraint = threadPanelBelowFlashConstraint
+        self.threadBadgeBelowFlashConstraint = threadBadgeBelowFlashConstraint
 
         let petWidthConstraint = petView.widthAnchor.constraint(equalToConstant: petView.intrinsicContentSize.width)
         let petHeightConstraint = petView.heightAnchor.constraint(equalToConstant: petView.intrinsicContentSize.height)
@@ -498,7 +538,6 @@ final class PetWindowContentView: NSView {
             threadPanelWidthConstraint,
             panelHeightConstraint,
 
-            flashStackView.topAnchor.constraint(equalTo: petView.topAnchor, constant: Self.flashTopOffset),
             flashStackView.widthAnchor.constraint(equalToConstant: Self.flashStackWidth)
         ])
         applyFloatingSurfacePlacement()
@@ -954,28 +993,62 @@ final class PetWindowContentView: NSView {
         threadBadgeBelowThreadPanelConstraint?.isActive = false
         threadBadgeLeadingConstraint?.isActive = false
         threadBadgeTrailingConstraint?.isActive = false
+        flashTopConstraint?.isActive = false
+        flashBelowPetConstraint?.isActive = false
+        flashBelowThreadPanelConstraint?.isActive = false
+        flashBelowThreadBadgeConstraint?.isActive = false
+        petBelowFlashConstraint?.isActive = false
+        threadPanelBelowFlashConstraint?.isActive = false
+        threadBadgeBelowFlashConstraint?.isActive = false
 
         let hasBadge = isThreadBadgeVisible
         let hasPanel = isThreadPanelVisible
+        let hasSideSurface = hasSideStack
 
         if threadPanelVerticalPlacement == .abovePet {
             if hasPanel {
                 threadPanelTopConstraint?.isActive = true
                 if hasBadge {
                     threadBadgeBelowThreadPanelConstraint?.isActive = true
-                    petBelowThreadBadgeConstraint?.isActive = true
+                    if hasSideSurface {
+                        flashBelowThreadBadgeConstraint?.isActive = true
+                        petBelowFlashConstraint?.isActive = true
+                    } else {
+                        petBelowThreadBadgeConstraint?.isActive = true
+                    }
+                } else if hasSideSurface {
+                    flashBelowThreadPanelConstraint?.isActive = true
+                    petBelowFlashConstraint?.isActive = true
                 } else {
                     petBelowThreadPanelConstraint?.isActive = true
                 }
             } else if hasBadge {
                 threadBadgeTopConstraint?.isActive = true
-                petBelowThreadBadgeConstraint?.isActive = true
+                if hasSideSurface {
+                    flashBelowThreadBadgeConstraint?.isActive = true
+                    petBelowFlashConstraint?.isActive = true
+                } else {
+                    petBelowThreadBadgeConstraint?.isActive = true
+                }
+            } else if hasSideSurface {
+                flashTopConstraint?.isActive = true
+                petBelowFlashConstraint?.isActive = true
             } else {
                 petTopConstraint?.isActive = true
             }
         } else {
             petTopConstraint?.isActive = true
-            if hasBadge {
+            if hasSideSurface {
+                flashBelowPetConstraint?.isActive = true
+                if hasBadge {
+                    threadBadgeBelowFlashConstraint?.isActive = true
+                    if hasPanel {
+                        threadPanelBelowThreadBadgeConstraint?.isActive = true
+                    }
+                } else if hasPanel {
+                    threadPanelBelowFlashConstraint?.isActive = true
+                }
+            } else if hasBadge {
                 threadBadgeBelowPetConstraint?.isActive = true
                 if hasPanel {
                     threadPanelBelowThreadBadgeConstraint?.isActive = true

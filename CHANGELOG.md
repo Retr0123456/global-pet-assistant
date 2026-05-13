@@ -7,6 +7,10 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.8 - 2026-05-13
+
+- Made flash and focus-timer side messages follow the pet's vertical screen placement instead of staying fixed to the pet's top edge.
+
 ## 0.4.7 - 2026-05-13
 
 - Centered the compact thread status counts independently from the expanded-state chevron.
