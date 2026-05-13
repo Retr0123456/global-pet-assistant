@@ -1,0 +1,35 @@
+{
+  "id": "kitty",
+  "title": "Kitty Command Flashes",
+  "category": "terminal",
+  "recommended": true,
+  "requires": {
+    "commands": ["kitty"],
+    "paths": []
+  },
+  "modifies": [
+    "~/.config/kitty/kitty.conf",
+    "~/.config/kitty/global-pet-assistant/"
+  ],
+  "install": {
+    "script": "plugins/kitty/install.sh"
+  },
+  "verify": {
+    "script": "Tools/verify-kitty-plugin.sh"
+  },
+  "uninstall": {
+    "removePaths": ["~/.config/kitty/global-pet-assistant/"],
+    "managedBlocks": [
+      {
+        "path": "~/.config/kitty/kitty.conf",
+        "begin": "# >>> global-pet-assistant kitty remote control >>>",
+        "end": "# <<< global-pet-assistant kitty remote control <<<"
+      },
+      {
+        "path": "~/.zshrc",
+        "begin": "# >>> global-pet-assistant kitty plugin >>>",
+        "end": "# <<< global-pet-assistant kitty plugin <<<"
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "codex",
+  "title": "Codex Session Reminders",
+  "category": "agent",
+  "recommended": true,
+  "requires": {
+    "commands": ["codex"],
+    "paths": []
+  },
+  "modifies": [
+    "~/.codex/hooks.json",
+    "~/.codex/config.toml"
+  ],
+  "install": {
+    "script": "plugins/codex/install.sh"
+  },
+  "verify": null,
+  "uninstall": {
+    "removePaths": [],
+    "managedBlocks": [],
+    "codexManagedHooks": true,
+    "codexFeatureFlagPath": "~/.codex/config.toml"
+  }
+}

@@ -59,37 +59,17 @@ app from Finder with Control-click -> Open, or allow it from System Settings.
 
 ## Quick Start
 
-Choose one integration first. You can install both later.
-
-### Kitty Command Flashes
-
-Use this if kitty is your main terminal and you want command start/end feedback.
+Run the bundled setup guide after launching the app:
 
 ```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/setup-integrations.sh
 ```
 
-Fully quit and reopen kitty, then run:
-
-```zsh
-sleep 3
-false
-```
-
-`sleep 3` should show a short success flash. `false` should show a short failure
-flash.
-
-### Codex Session Reminders
-
-Use this if you want the pet to track Codex lifecycle events.
-
-```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
-```
-
-Restart Codex sessions after installing. New prompts should mark the session as
-running, approval-needed states should show as waiting, and completed turns
-should appear in the thread panel until dismissed.
+Dragging the DMG into `/Applications` does not modify terminal or coding-agent
+configuration. The setup guide shows the exact external files it may modify,
+backs up existing files, and lets you choose integrations such as Kitty command
+flashes and Codex session reminders. `petctl` is bundled inside the app; global
+registration is optional.
 
 See the full guide in [Integration Setup](docs/integrations.md).
 

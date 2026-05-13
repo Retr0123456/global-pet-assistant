@@ -2,9 +2,9 @@
 
 [中文](integrations.zh-CN.md) | [Documentation](README.md) | [Project README](../README.md)
 
-Install Global Pet Assistant, launch it once, then connect one signal source.
-Starting with one integration keeps troubleshooting simple; Kitty and Codex can
-run side by side later.
+Install Global Pet Assistant, launch it once, then run the bundled setup guide.
+Dragging the DMG into `/Applications` does not modify terminal or coding-agent
+configuration; the setup guide shows a plan before writing external files.
 
 ```bash
 open /Applications/GlobalPetAssistant.app
@@ -13,6 +13,25 @@ curl -fsS http://127.0.0.1:17321/healthz
 
 `healthz` should return JSON. If it fails, confirm that the app is running
 before installing any integration.
+
+## Guided Setup
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/setup-integrations.sh
+```
+
+The guide uses the bundled `petctl` binary. `petctl` is not automatically added
+to `PATH` by the DMG install; optional global registration is available through
+the `petctl-shim` module.
+
+Useful non-interactive commands:
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl install --dry-run
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl install --with kitty,codex --yes
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl doctor
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl uninstall kitty --dry-run
+```
 
 ## Choose A Path
 
@@ -30,6 +49,14 @@ Assistant.
 It does not need tmux and does not edit shell startup files by default.
 
 ### Install
+
+Recommended:
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl install --with kitty
+```
+
+Manual module script:
 
 ```bash
 /Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
@@ -62,11 +89,10 @@ Expected result:
 ### Uninstall
 
 ```bash
-rm -rf "$HOME/.config/kitty/global-pet-assistant"
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl uninstall kitty
 ```
 
-Then remove the marked Global Pet Assistant include block from
-`~/.config/kitty/kitty.conf`.
+This removes Global Pet Assistant managed files and marked config blocks only.
 
 ## Codex Hooks
 
@@ -76,8 +102,16 @@ agent session state instead of only shell command results.
 
 ### Install
 
+Recommended:
+
 ```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl install --with codex
+```
+
+Manual module script:
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/codex/install.sh
 ```
 
 Restart Codex sessions after installing. The installer writes managed entries to
@@ -102,8 +136,11 @@ Disable temporarily for one shell:
 export GLOBAL_PET_ASSISTANT_DISABLE_CODEX_HOOKS=1
 ```
 
-To remove the hook permanently, delete managed commands containing
-`global-pet-agent-bridge --source codex` from `~/.codex/hooks.json`.
+To remove the hook permanently, run:
+
+```bash
+/Applications/GlobalPetAssistant.app/Contents/Resources/bin/petctl uninstall codex
+```
 
 ## Local Event API
 

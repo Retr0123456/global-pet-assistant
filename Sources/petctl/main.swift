@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import Darwin
 
 struct PetctlAction: Encodable {
     var type: String
@@ -38,6 +39,41 @@ enum PetctlCommand {
     case openFolder
     case openLogs
     case importPet(String)
+    case install(InstallerRequest)
+    case doctor
+    case uninstall(InstallerRequest)
+}
+
+struct InstallerRequest {
+    var moduleIDs: [String]
+    var dryRun: Bool
+    var assumeYes: Bool
+}
+
+private struct IntegrationModule {
+    struct ManagedBlock {
+        var path: String
+        var begin: String
+        var end: String
+    }
+
+    struct UninstallSpec {
+        var removePaths: [String]
+        var managedBlocks: [ManagedBlock]
+        var codexManagedHooks: Bool = false
+        var codexFeatureFlagPath: String? = nil
+    }
+
+    var id: String
+    var title: String
+    var category: String
+    var recommended: Bool
+    var requiredCommands: [String]
+    var modifiedPaths: [String]
+    var installScript: String?
+    var verifyScript: String?
+    var installEnvironment: [String: String] = [:]
+    var uninstall: UninstallSpec
 }
 
 private struct PetImportManifest: Decodable {
@@ -106,6 +142,9 @@ Usage:
   petctl open-logs
   petctl import-pet <name>
   petctl import-codex-pet <name>
+  petctl install [--with kitty,codex] [--dry-run] [--yes]
+  petctl doctor
+  petctl uninstall <module[,module...]> [--dry-run] [--yes]
 
 Commands:
   notify            Send a notification event. Levels: info, running, success, warning, danger.
@@ -117,6 +156,9 @@ Commands:
   open-logs         Open ~/.global-pet-assistant/logs in Finder.
   import-pet        Validate and copy a pet from configured import source directories.
   import-codex-pet  Compatibility alias for import-pet.
+  install           Interactively install external integrations from the bundled App tools.
+  doctor            Check app reachability, bundled tools, integration scripts, and dependencies.
+  uninstall         Remove Global Pet Assistant managed integration configuration.
 """
 
 let arguments = Array(CommandLine.arguments.dropFirst())
@@ -240,6 +282,16 @@ private func parse(_ arguments: [String]) throws -> PetctlCommand {
         }
 
         return .importPet(arguments[1])
+    case "install":
+        return .install(try parseInstallerRequest(Array(arguments.dropFirst()), requiresModuleArgument: false))
+    case "doctor":
+        guard arguments.count == 1 else {
+            throw PetctlError.usage("doctor does not accept arguments.")
+        }
+
+        return .doctor
+    case "uninstall":
+        return .uninstall(try parseInstallerRequest(Array(arguments.dropFirst()), requiresModuleArgument: true))
     case "help", "--help", "-h":
         print(usage)
         exit(0)
@@ -260,7 +312,49 @@ private func run(_ command: PetctlCommand) throws {
         try openLogsFolder()
     case .importPet(let name):
         try importPet(named: name)
+    case .install(let request):
+        try installIntegrations(request)
+    case .doctor:
+        try runDoctor()
+    case .uninstall(let request):
+        try uninstallIntegrations(request)
     }
+}
+
+private func parseInstallerRequest(
+    _ arguments: [String],
+    requiresModuleArgument: Bool
+) throws -> InstallerRequest {
+    if requiresModuleArgument {
+        guard let first = arguments.first, !first.hasPrefix("--") else {
+            throw PetctlError.usage("Usage: petctl uninstall <module[,module...]> [--dry-run] [--yes].")
+        }
+        var options = try parseOptions(Array(arguments.dropFirst()), booleanFlags: ["dry-run", "yes"])
+        let request = InstallerRequest(
+            moduleIDs: moduleIDs(from: first),
+            dryRun: try takeBool("dry-run", from: &options) ?? false,
+            assumeYes: try takeBool("yes", from: &options) ?? false
+        )
+        try rejectUnknownOptions(options)
+        return request
+    }
+
+    var options = try parseOptions(arguments, booleanFlags: ["dry-run", "yes"])
+    let moduleIDs = options.removeValue(forKey: "with").map(moduleIDs(from:)) ?? []
+    let request = InstallerRequest(
+        moduleIDs: moduleIDs,
+        dryRun: try takeBool("dry-run", from: &options) ?? false,
+        assumeYes: try takeBool("yes", from: &options) ?? false
+    )
+    try rejectUnknownOptions(options)
+    return request
+}
+
+private func moduleIDs(from rawValue: String) -> [String] {
+    rawValue
+        .split(separator: ",")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
 }
 
 private func parseRunCommand(_ arguments: [String]) throws -> PetctlCommand {
@@ -540,6 +634,606 @@ private func replaceCopy(from sourceURL: URL, to destinationURL: URL) throws {
     try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
 }
 
+private func installIntegrations(_ request: InstallerRequest) throws {
+    let modules = try selectedInstallModules(for: request)
+    guard !modules.isEmpty else {
+        print("No integration modules selected.")
+        return
+    }
+
+    printInstallPlan(title: "Global Pet Assistant integration install plan", modules: modules)
+    fflush(stdout)
+    if request.dryRun {
+        print("Dry run only. No files were changed.")
+        return
+    }
+
+    try confirmIfNeeded(request.assumeYes, prompt: "Continue with installation? [y/N] ")
+    let resourceRoot = try bundledResourceRoot()
+    for module in modules {
+        print("\nInstalling \(module.title)")
+        try backupExternalFiles(for: module)
+        fflush(stdout)
+        if module.id == "petctl-shim" {
+            try installPetctlShim()
+        } else if let installScript = module.installScript {
+            try runBundledScript(
+                installScript,
+                resourceRoot: resourceRoot,
+                environment: module.installEnvironment
+            )
+        } else {
+            throw PetctlError.requestFailed("No installer is defined for module '\(module.id)'.")
+        }
+
+        if let verifyScript = module.verifyScript {
+            try runBundledScript(verifyScript, resourceRoot: resourceRoot)
+        }
+    }
+
+    print("\nIntegration install finished.")
+    print("Some tools may need a restart before they load new configuration.")
+}
+
+private func uninstallIntegrations(_ request: InstallerRequest) throws {
+    let modules = try modulesMatching(request.moduleIDs)
+    printInstallPlan(title: "Global Pet Assistant integration uninstall plan", modules: modules)
+    fflush(stdout)
+    if request.dryRun {
+        print("Dry run only. No files were changed.")
+        return
+    }
+
+    try confirmIfNeeded(request.assumeYes, prompt: "Continue with uninstall? [y/N] ")
+    for module in modules {
+        print("\nUninstalling \(module.title)")
+        try backupExternalFiles(for: module)
+        fflush(stdout)
+        if module.id == "petctl-shim" {
+            try uninstallPetctlShim()
+        }
+        for managedBlock in module.uninstall.managedBlocks {
+            try removeManagedBlock(managedBlock)
+        }
+        for path in module.uninstall.removePaths {
+            let url = expandedURL(path)
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+                print("Removed \(pathForDisplay(url))")
+            }
+        }
+        if module.uninstall.codexManagedHooks {
+            try removeCodexManagedHooks()
+        }
+        if let featureFlagPath = module.uninstall.codexFeatureFlagPath {
+            try disableCodexHooksFeatureFlag(at: expandedURL(featureFlagPath))
+        }
+    }
+
+    print("\nIntegration uninstall finished.")
+}
+
+private func runDoctor() throws {
+    let resourceRoot = try? bundledResourceRoot()
+    print("Global Pet Assistant doctor")
+    print("App home: \(appRootDirectoryURL().path)")
+    print("petctl: \(petctlExecutableURL().path)")
+    if let resourceRoot {
+        print("resources: \(resourceRoot.path)")
+    } else {
+        print("resources: not found")
+    }
+
+    print("healthz: \(localAppHealthStatus(timeoutSeconds: 0.7))")
+    print("\nDependencies:")
+    for command in ["kitty", "codex"] {
+        if let path = commandPath(command) {
+            print("  \(command): \(path)")
+        } else {
+            print("  \(command): not found")
+        }
+    }
+
+    print("\nIntegration modules:")
+    for module in integrationModules() {
+        let scriptStatus: String
+        if let installScript = module.installScript, let resourceRoot {
+            let scriptURL = resourceRoot.appendingPathComponent(installScript)
+            scriptStatus = FileManager.default.isExecutableFile(atPath: scriptURL.path) ? "ready" : "missing"
+        } else if module.id == "petctl-shim" {
+            scriptStatus = "built in"
+        } else {
+            scriptStatus = "not configured"
+        }
+        print("  \(module.id): \(scriptStatus)")
+    }
+}
+
+private func selectedInstallModules(for request: InstallerRequest) throws -> [IntegrationModule] {
+    if !request.moduleIDs.isEmpty {
+        return try modulesMatching(request.moduleIDs)
+    }
+
+    if isatty(STDIN_FILENO) == 0 && !request.assumeYes && !request.dryRun {
+        throw PetctlError.usage("Use --with, --yes, or run petctl install from an interactive terminal.")
+    }
+
+    let recommendedModules = integrationModules().filter(\.recommended)
+    if request.assumeYes || request.dryRun {
+        return recommendedModules
+    }
+
+    print("Global Pet Assistant Setup")
+    print("\nDetected:")
+    for command in ["kitty", "codex"] {
+        let status = commandPath(command) == nil ? "not found" : "found"
+        print("  \(command): \(status)")
+    }
+
+    print("\nAvailable modules:")
+    for module in integrationModules() {
+        let marker = module.recommended ? "recommended" : "advanced"
+        print("  \(module.id) - \(module.title) (\(marker))")
+        for path in module.modifiedPaths {
+            print("      modifies \(path)")
+        }
+    }
+
+    let defaultIDs = recommendedModules.map(\.id).joined(separator: ",")
+    print("\nChoose modules to install [\(defaultIDs)]: ", terminator: "")
+    guard let line = readLine() else {
+        throw PetctlError.usage("No modules selected.")
+    }
+
+    let selectedIDs = line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ? recommendedModules.map(\.id)
+        : moduleIDs(from: line)
+    return try modulesMatching(selectedIDs)
+}
+
+private func modulesMatching(_ ids: [String]) throws -> [IntegrationModule] {
+    let modulesByID = Dictionary(uniqueKeysWithValues: integrationModules().map { ($0.id, $0) })
+    var modules: [IntegrationModule] = []
+    for id in ids {
+        guard let module = modulesByID[id] else {
+            throw PetctlError.usage("Unknown integration module: \(id).")
+        }
+        modules.append(module)
+    }
+    return modules
+}
+
+private func integrationModules() -> [IntegrationModule] {
+    [
+        IntegrationModule(
+            id: "kitty",
+            title: "Kitty Command Flashes",
+            category: "terminal",
+            recommended: true,
+            requiredCommands: ["kitty"],
+            modifiedPaths: [
+                "~/.config/kitty/kitty.conf",
+                "~/.config/kitty/global-pet-assistant/"
+            ],
+            installScript: "plugins/kitty/install.sh",
+            verifyScript: "Tools/verify-kitty-plugin.sh",
+            uninstall: .init(
+                removePaths: ["~/.config/kitty/global-pet-assistant/"],
+                managedBlocks: [
+                    .init(
+                        path: "~/.config/kitty/kitty.conf",
+                        begin: "# >>> global-pet-assistant kitty remote control >>>",
+                        end: "# <<< global-pet-assistant kitty remote control <<<"
+                    ),
+                    .init(
+                        path: "~/.zshrc",
+                        begin: "# >>> global-pet-assistant kitty plugin >>>",
+                        end: "# <<< global-pet-assistant kitty plugin <<<"
+                    )
+                ]
+            )
+        ),
+        IntegrationModule(
+            id: "codex",
+            title: "Codex Session Reminders",
+            category: "agent",
+            recommended: true,
+            requiredCommands: ["codex"],
+            modifiedPaths: [
+                "~/.codex/hooks.json",
+                "~/.codex/config.toml"
+            ],
+            installScript: "plugins/codex/install.sh",
+            verifyScript: nil,
+            uninstall: .init(
+                removePaths: [],
+                managedBlocks: [],
+                codexManagedHooks: true,
+                codexFeatureFlagPath: "~/.codex/config.toml"
+            )
+        ),
+        IntegrationModule(
+            id: "petctl-shim",
+            title: "Optional petctl command shim",
+            category: "cli",
+            recommended: false,
+            requiredCommands: [],
+            modifiedPaths: [
+                "~/.local/bin/petctl"
+            ],
+            installScript: nil,
+            verifyScript: nil,
+            uninstall: .init(
+                removePaths: ["~/.local/bin/petctl"],
+                managedBlocks: []
+            )
+        ),
+        IntegrationModule(
+            id: "kitty-legacy-zsh",
+            title: "Legacy Kitty zsh Compatibility",
+            category: "terminal",
+            recommended: false,
+            requiredCommands: ["kitty"],
+            modifiedPaths: [
+                "~/.zshrc",
+                "~/.config/kitty/global-pet-assistant/"
+            ],
+            installScript: "plugins/kitty/install.sh",
+            verifyScript: nil,
+            installEnvironment: ["GPA_KITTY_PLUGIN_INSTALL_ZSHRC": "1"],
+            uninstall: .init(
+                removePaths: [],
+                managedBlocks: [
+                    .init(
+                        path: "~/.zshrc",
+                        begin: "# >>> global-pet-assistant kitty plugin >>>",
+                        end: "# <<< global-pet-assistant kitty plugin <<<"
+                    )
+                ]
+            )
+        )
+    ]
+}
+
+private func printInstallPlan(title: String, modules: [IntegrationModule]) {
+    print(title)
+    print("healthz: \(localAppHealthStatus(timeoutSeconds: 0.7))")
+    print("\nModules:")
+    for module in modules {
+        print("  - \(module.id): \(module.title)")
+        let missingCommands = module.requiredCommands.filter { commandPath($0) == nil }
+        if !missingCommands.isEmpty {
+            print("    warning: missing command(s): \(missingCommands.joined(separator: ", "))")
+        }
+    }
+
+    let modifiedPaths = modules.flatMap(\.modifiedPaths)
+    if !modifiedPaths.isEmpty {
+        print("\nExternal files or directories that may change:")
+        for path in Array(Set(modifiedPaths)).sorted() {
+            print("  \(path)")
+        }
+    }
+
+    print("\nExisting files will be backed up before modification.")
+}
+
+private func confirmIfNeeded(_ assumeYes: Bool, prompt: String) throws {
+    if assumeYes {
+        return
+    }
+
+    guard isatty(STDIN_FILENO) != 0 else {
+        throw PetctlError.usage("Refusing to modify external configuration without --yes in a non-interactive shell.")
+    }
+
+    print(prompt, terminator: "")
+    let answer = readLine()?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    guard answer == "y" || answer == "yes" else {
+        throw PetctlError.usage("Cancelled.")
+    }
+}
+
+private func backupExternalFiles(for module: IntegrationModule) throws {
+    var rawPaths = module.modifiedPaths
+    rawPaths.append(contentsOf: module.uninstall.managedBlocks.map(\.path))
+    if module.uninstall.codexManagedHooks {
+        rawPaths.append("~/.codex/hooks.json")
+    }
+    if let codexFeatureFlagPath = module.uninstall.codexFeatureFlagPath {
+        rawPaths.append(codexFeatureFlagPath)
+    }
+
+    for rawPath in Array(Set(rawPaths)).sorted() {
+        let url = expandedURL(rawPath)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              !isDirectory.boolValue
+        else {
+            continue
+        }
+        let backupURL = url.deletingLastPathComponent()
+            .appendingPathComponent("\(url.lastPathComponent).global-pet-assistant-backup-\(backupTimestamp())")
+        try FileManager.default.copyItem(at: url, to: backupURL)
+        print("Backed up \(pathForDisplay(url)) to \(pathForDisplay(backupURL))")
+    }
+}
+
+private func runBundledScript(
+    _ relativePath: String,
+    resourceRoot: URL,
+    environment: [String: String] = [:]
+) throws {
+    let scriptURL = resourceRoot.appendingPathComponent(relativePath)
+    guard FileManager.default.isExecutableFile(atPath: scriptURL.path) else {
+        throw PetctlError.requestFailed("Bundled script is missing or not executable: \(scriptURL.path)")
+    }
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["bash", scriptURL.path]
+    var processEnvironment = ProcessInfo.processInfo.environment
+    processEnvironment["GPA_RESOURCE_ROOT"] = resourceRoot.path
+    for (key, value) in environment {
+        processEnvironment[key] = value
+    }
+    process.environment = processEnvironment
+    try process.run()
+    process.waitUntilExit()
+
+    guard process.terminationStatus == 0 else {
+        throw PetctlError.requestFailed("\(relativePath) failed with exit \(process.terminationStatus).")
+    }
+}
+
+private func installPetctlShim() throws {
+    let shimURL = expandedURL("~/.local/bin/petctl")
+    try FileManager.default.createDirectory(
+        at: shimURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+    )
+    if FileManager.default.fileExists(atPath: shimURL.path) {
+        try FileManager.default.removeItem(at: shimURL)
+    }
+    try FileManager.default.createSymbolicLink(
+        at: shimURL,
+        withDestinationURL: petctlExecutableURL()
+    )
+    print("Installed \(pathForDisplay(shimURL)) -> \(petctlExecutableURL().path)")
+    if !PATHContains(shimURL.deletingLastPathComponent()) {
+        print("Note: ~/.local/bin is not currently on PATH. Add it manually if you want to run petctl by name.")
+    }
+}
+
+private func uninstallPetctlShim() throws {
+    let shimURL = expandedURL("~/.local/bin/petctl")
+    guard FileManager.default.fileExists(atPath: shimURL.path) else {
+        return
+    }
+    try FileManager.default.removeItem(at: shimURL)
+    print("Removed \(pathForDisplay(shimURL))")
+}
+
+private func removeManagedBlock(_ block: IntegrationModule.ManagedBlock) throws {
+    let url = expandedURL(block.path)
+    guard FileManager.default.fileExists(atPath: url.path) else {
+        return
+    }
+    let content = try String(contentsOf: url, encoding: .utf8)
+    let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    var output: [String] = []
+    var skipping = false
+    var removed = false
+    for line in lines {
+        if line == block.begin {
+            skipping = true
+            removed = true
+            continue
+        }
+        if line == block.end {
+            skipping = false
+            continue
+        }
+        if !skipping {
+            output.append(line)
+        }
+    }
+    guard removed else {
+        return
+    }
+    try output.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    print("Removed managed block from \(pathForDisplay(url))")
+}
+
+private func removeCodexManagedHooks() throws {
+    let hooksURL = expandedURL("~/.codex/hooks.json")
+    guard FileManager.default.fileExists(atPath: hooksURL.path) else {
+        return
+    }
+    let data = try Data(contentsOf: hooksURL)
+    var root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    guard var hooks = root["hooks"] as? [String: Any] else {
+        return
+    }
+    var changed = false
+    for (eventName, rawGroups) in hooks {
+        guard let groups = rawGroups as? [[String: Any]] else {
+            continue
+        }
+        var nextGroups: [[String: Any]] = []
+        for var group in groups {
+            guard let entries = group["hooks"] as? [[String: Any]] else {
+                nextGroups.append(group)
+                continue
+            }
+            let filteredEntries = entries.filter { entry in
+                guard let command = entry["command"] as? String else {
+                    return true
+                }
+                return !command.contains("global-pet-agent-bridge")
+            }
+            if filteredEntries.count != entries.count {
+                changed = true
+            }
+            if !filteredEntries.isEmpty {
+                group["hooks"] = filteredEntries
+                nextGroups.append(group)
+            }
+        }
+        hooks[eventName] = nextGroups
+    }
+    guard changed else {
+        return
+    }
+    root["hooks"] = hooks
+    var output = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+    output.append(0x0a)
+    try output.write(to: hooksURL, options: [.atomic])
+    print("Removed managed Codex hook entries from \(pathForDisplay(hooksURL))")
+}
+
+private func disableCodexHooksFeatureFlag(at url: URL) throws {
+    guard FileManager.default.fileExists(atPath: url.path) else {
+        return
+    }
+    let content = try String(contentsOf: url, encoding: .utf8)
+    guard content.contains("codex_hooks") else {
+        return
+    }
+    let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
+        if line.trimmingCharacters(in: .whitespaces).hasPrefix("codex_hooks") {
+            return "codex_hooks = false"
+        }
+        return String(line)
+    }
+    try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    print("Disabled codex_hooks in \(pathForDisplay(url))")
+}
+
+private func localAppHealthStatus(timeoutSeconds: TimeInterval) -> String {
+    guard let url = URL(string: "http://127.0.0.1:17321/healthz") else {
+        return "invalid URL"
+    }
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = timeoutSeconds
+    configuration.timeoutIntervalForResource = timeoutSeconds
+    let semaphore = DispatchSemaphore(value: 0)
+    let box = ResponseBox()
+    URLSession(configuration: configuration).dataTask(with: url) { data, response, error in
+        defer { semaphore.signal() }
+        if let error {
+            box.result = .failure(error)
+            return
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            box.result = .failure(PetctlError.requestFailed("no HTTP response"))
+            return
+        }
+        box.result = .success((data ?? Data(), httpResponse))
+    }.resume()
+    guard semaphore.wait(timeout: .now() + timeoutSeconds) == .success,
+          let result = box.result
+    else {
+        return "not reachable"
+    }
+    switch result {
+    case .success((_, let response)):
+        return (200..<300).contains(response.statusCode) ? "reachable" : "HTTP \(response.statusCode)"
+    case .failure:
+        return "not reachable"
+    }
+}
+
+private func commandPath(_ command: String) -> String? {
+    let process = Process()
+    let pipe = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["sh", "-lc", "command -v \(shellQuoted(command))"]
+    process.standardOutput = pipe
+    process.standardError = FileHandle.nullDevice
+    guard (try? process.run()) != nil else {
+        return nil
+    }
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+        return nil
+    }
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    return path?.isEmpty == false ? path : nil
+}
+
+private func bundledResourceRoot() throws -> URL {
+    if let rawRoot = ProcessInfo.processInfo.environment["GPA_RESOURCE_ROOT"],
+       !rawRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return expandedURL(rawRoot)
+    }
+
+    let executableURL = petctlExecutableURL()
+    let binDirectory = executableURL.deletingLastPathComponent()
+    if binDirectory.lastPathComponent == "bin",
+       binDirectory.deletingLastPathComponent().lastPathComponent == "Resources" {
+        return binDirectory.deletingLastPathComponent()
+    }
+
+    var candidate = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        .standardizedFileURL
+    while candidate.path != "/" {
+        if FileManager.default.fileExists(atPath: candidate.appendingPathComponent("Package.swift").path) {
+            return candidate
+        }
+        candidate.deleteLastPathComponent()
+    }
+
+    throw PetctlError.requestFailed("Could not locate bundled resources. Set GPA_RESOURCE_ROOT.")
+}
+
+private func petctlExecutableURL() -> URL {
+    let rawPath = CommandLine.arguments[0]
+    let url: URL
+    if rawPath.hasPrefix("/") {
+        url = URL(fileURLWithPath: rawPath)
+    } else {
+        url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(rawPath)
+    }
+    return url.standardizedFileURL
+}
+
+private func expandedURL(_ path: String) -> URL {
+    URL(fileURLWithPath: expandUserPath(path)).standardizedFileURL
+}
+
+private func pathForDisplay(_ url: URL) -> String {
+    let home = userHomeDirectoryURL().standardizedFileURL.path
+    if url.path == home {
+        return "~"
+    }
+    if url.path.hasPrefix(home + "/") {
+        return "~/" + String(url.path.dropFirst(home.count + 1))
+    }
+    return url.path
+}
+
+private func backupTimestamp() -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyyMMdd-HHmmss"
+    return formatter.string(from: Date())
+}
+
+private func shellQuoted(_ value: String) -> String {
+    "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+}
+
+private func PATHContains(_ directory: URL) -> Bool {
+    let target = directory.standardizedFileURL.path
+    return (ProcessInfo.processInfo.environment["PATH"] ?? "")
+        .split(separator: ":")
+        .map(String.init)
+        .contains { URL(fileURLWithPath: $0).standardizedFileURL.path == target }
+}
+
 private func executeRun(_ request: PetctlRunRequest) throws -> Never {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -700,7 +1394,7 @@ private func appRootDirectoryURL() -> URL {
         return URL(fileURLWithPath: expandUserPath(root), isDirectory: true).standardizedFileURL
     }
 
-    return FileManager.default.homeDirectoryForCurrentUser
+    return userHomeDirectoryURL()
         .appendingPathComponent(".global-pet-assistant", isDirectory: true)
 }
 
@@ -733,11 +1427,11 @@ private func configuredPetImportSourceDirectories() -> [String]? {
 
 private func expandUserPath(_ path: String) -> String {
     if path == "~" {
-        return FileManager.default.homeDirectoryForCurrentUser.path
+        return userHomeDirectoryURL().path
     }
 
     if path.hasPrefix("~/") {
-        return FileManager.default.homeDirectoryForCurrentUser
+        return userHomeDirectoryURL()
             .appendingPathComponent(String(path.dropFirst(2)))
             .path
     }
@@ -746,7 +1440,16 @@ private func expandUserPath(_ path: String) -> String {
 }
 
 private func defaultCodexPetsDirectoryURL() -> URL {
-    FileManager.default.homeDirectoryForCurrentUser
+    userHomeDirectoryURL()
         .appendingPathComponent(".codex", isDirectory: true)
         .appendingPathComponent("pets", isDirectory: true)
+}
+
+private func userHomeDirectoryURL() -> URL {
+    if let home = ProcessInfo.processInfo.environment["HOME"],
+       !home.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return URL(fileURLWithPath: home, isDirectory: true).standardizedFileURL
+    }
+
+    return FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
 }

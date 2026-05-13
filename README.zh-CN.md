@@ -56,35 +56,15 @@ Control-click -> Open，或在 System Settings 中允许打开。
 
 ## 快速开始
 
-先选择一个集成。之后也可以两个都安装。
-
-### Kitty 命令反馈
-
-如果你主要使用 kitty，并且想看到命令开始/结束反馈，选这个。
+启动应用后运行内置的交互式配置向导：
 
 ```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/plugins/kitty/install.sh
+/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/setup-integrations.sh
 ```
 
-完全退出并重新打开 kitty，然后运行：
-
-```zsh
-sleep 3
-false
-```
-
-`sleep 3` 应该显示短暂 success flash，`false` 应该显示短暂 failure flash。
-
-### Codex 会话提醒
-
-如果你想让宠物跟踪 Codex 生命周期事件，选这个。
-
-```bash
-/Applications/GlobalPetAssistant.app/Contents/Resources/Tools/install-codex-hooks.sh
-```
-
-安装后重启 Codex session。新的 prompt 会把会话标记为 running，需要批准时会显示
-waiting，turn 完成后会进入 thread panel，直到手动关闭。
+把 DMG 拖到 `/Applications` 不会自动修改终端或 coding agent 配置。配置向导会先
+显示将要修改的外部文件，备份已有文件，然后让你选择 Kitty 命令反馈、Codex 会话
+提醒等集成。`petctl` 已经内置在 app 里，全局注册是可选项。
 
 完整说明见 [集成配置](docs/integrations.zh-CN.md)。
 
