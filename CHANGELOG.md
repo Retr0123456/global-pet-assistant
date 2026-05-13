@@ -7,6 +7,10 @@ Changelog, but it has not committed to semantic versioning before `1.0.0`.
 
 ## Unreleased
 
+## 0.4.5 - 2026-05-13
+
+- Fixed the compact thread status bar so the expand chevron no longer shifts the status counts when the thread panel is opened.
+
 ## 0.4.4 - 2026-05-13
 
 - Moved the compact thread status bar out of the pet sprite area so it follows the pet's screen quadrant without covering the pet.

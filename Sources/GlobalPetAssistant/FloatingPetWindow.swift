@@ -1574,7 +1574,7 @@ private final class ThreadBadgeEffectButton: NSView {
         failedSegment.update(count: summary.failedCount)
         runningSegment.update(count: summary.runningCount)
         successSegment.update(count: summary.successCount)
-        chevronView.isHidden = !isExpanded
+        chevronView.alphaValue = isExpanded ? 1 : 0
         toolTip = isExpanded ? "Hide thread details. \(summary.tooltip)" : "Show thread details. \(summary.tooltip)"
     }
 
@@ -1610,7 +1610,7 @@ private final class ThreadBadgeEffectButton: NSView {
         )
         chevronView.contentTintColor = NSColor.white.withAlphaComponent(0.86)
         chevronView.imageScaling = .scaleProportionallyDown
-        chevronView.isHidden = true
+        chevronView.alphaValue = 0
 
         NSLayoutConstraint.activate([
             effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
