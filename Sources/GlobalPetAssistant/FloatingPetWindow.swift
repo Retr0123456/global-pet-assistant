@@ -310,7 +310,8 @@ final class PetWindowContentView: NSView {
         let petSize = petView.intrinsicContentSize
         let scaleControlSideWidth = isPetResizeControlVisible ? Self.scaleControlWidth + Self.scaleControlGap : 0
         let flashSideWidth = hasSideStack ? Self.flashStackWidth + Self.flashPetGap : 0
-        let primaryWidth = petSize.width + scaleControlSideWidth + flashSideWidth
+        let badgeWidth = isThreadBadgeVisible ? Self.threadStatusBarWidth : 0
+        let primaryWidth = max(petSize.width, badgeWidth) + scaleControlSideWidth + flashSideWidth
         let resizeControlHeight = isPetResizeControlVisible ? Self.scaleControlHeight : 0
         let primaryHeight = max(petSize.height, resizeControlHeight, flashStackHeight + Self.flashTopOffset)
         let badgeHeight = isThreadBadgeVisible ? Self.threadStatusBarGap + Self.threadStatusBarHeight : 0
